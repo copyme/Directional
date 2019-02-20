@@ -1,7 +1,4 @@
 #include <iostream>
-#include <directional/power_field.h>
-#include <directional/power_to_representative.h>
-#include <directional/power_to_raw.h>
 #include <directional/polyvector_to_raw.h>
 #include <directional/polyvector_field.h>
 #include <directional/principal_matching.h>
@@ -12,9 +9,7 @@
 #include <Eigen/Core>
 #include <igl/opengl/glfw/Viewer.h>
 #include <igl/read_triangle_mesh.h>
-#include <igl/per_face_normals.h>
 #include <igl/unproject_onto_mesh.h>
-#include <igl/boundary_loop.h>
 #include <igl/edge_topology.h>
 
 int currF, currVec;
