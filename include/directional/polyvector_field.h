@@ -98,8 +98,7 @@ namespace directional
          assert(varCounter == N * (mB1.rows() - mBc.size()));
        }
 
-       void buildEnergyMatrix(const Eigen::MatrixXi & EV,
-                              const Eigen::MatrixXi & EF)
+       void buildEnergyMatrix(const Eigen::MatrixXi & EV, const Eigen::MatrixXi & EF)
        {
          unsigned int rowCounter = 0;
          // Build the sparse matrix, with an energy term for each edge and degree
@@ -122,17 +121,16 @@ namespace directional
              AfullTriplets.emplace_back(rowCounter, n * mB1.rows() + EF(i, 0), std::pow(conj(ef), N - n));
              AfullTriplets.emplace_back(rowCounter++, n * mB1.rows() + EF(i, 1), -1. * std::pow(conj(eg), N - n));
            }
-
-           std::vector<Eigen::Triplet<std::complex<double> > > AVarTriplets;
-           for (unsigned int i = 0; i < AfullTriplets.size(); i++)
-             if (full2var(AfullTriplets[i].col()) != -1)
-               AVarTriplets.emplace_back(AfullTriplets[i].row(), full2var(AfullTriplets[i].col()), AfullTriplets[i].value());
-
-           mAVar.conservativeResize(rowCounter, N * (mB1.rows() - mBc.size()));
-           mAVar.setFromTriplets(AVarTriplets.begin(), AVarTriplets.end());
          }
          mAfull.conservativeResize(rowCounter, N * mB1.rows());
          mAfull.setFromTriplets(AfullTriplets.begin(), AfullTriplets.end());
+
+         std::vector<Eigen::Triplet<std::complex<double> > > AVarTriplets;
+         for (unsigned int i = 0; i < AfullTriplets.size(); i++)
+           if (full2var(AfullTriplets[i].col()) != -1)
+             AVarTriplets.emplace_back(AfullTriplets[i].row(), full2var(AfullTriplets[i].col()), AfullTriplets[i].value());
+         mAVar.conservativeResize(rowCounter, N * (mB1.rows() - mBc.size()));
+         mAVar.setFromTriplets(AVarTriplets.begin(), AVarTriplets.end());
        }
 
        void evalNoHardConstraints(Eigen::MatrixXcd& polyVectorField)
@@ -145,9 +143,9 @@ namespace directional
          Eigen::SparseMatrix<std::complex<double> > AfullNRosy(int((double)mAfull.rows() / (double)N), int((double)mAfull.cols() / (double)N));
 
          std::vector<Eigen::Triplet<std::complex<double> > > AfullNRosyTriplets;
-         for (int k = 0; k < mAfull.outerSize(); ++k)
-           for (Eigen::SparseMatrix<std::complex<double> >::InnerIterator it(mAfull, k); it; ++it)
-             if ((it.row() < (double)mAfull.rows() / (double)N) && (it.col() < (double)mAfull.cols() / (double)N))
+         for(int k = 0; k < mAfull.outerSize(); ++k)
+           for(Eigen::SparseMatrix<std::complex<double> >::InnerIterator it(mAfull, k); it; ++it)
+             if((it.row() < (double)mAfull.rows() / (double)N) && (it.col() < (double)mAfull.cols() / (double)N))
                AfullNRosyTriplets.emplace_back(it.row(), it.col(), it.value());
 
          AfullNRosy.setFromTriplets(AfullNRosyTriplets.begin(), AfullNRosyTriplets.end());
@@ -265,10 +263,11 @@ namespace directional
   //  N:            The degree of the field.
   // Outputs:
   //  polyVectorField: #F by N The output interpolated field, in polyvector (complex polynomial) format.
-  IGL_INLINE void polyvector_field(const Eigen::MatrixXd& V,
-                                   const Eigen::MatrixXi& F,
-                                   const Eigen::VectorXi& bc,
-                                   const Eigen::MatrixXd& b,
+  IGL_INLINE void polyvector_field(const Eigen::MatrixXd & V,
+                                   const Eigen::MatrixXi & F,
+                                   const Eigen::VectorXi & bc,
+                                   const Eigen::MatrixXd & b,
+                                   //const Eigen::VectorXd & weights,
                                    const unsigned int N,
                                    Eigen::MatrixXcd& polyVectorField)
 
