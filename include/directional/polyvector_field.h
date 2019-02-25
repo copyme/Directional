@@ -103,7 +103,7 @@ namespace directional
           {
             std::complex<double> bComplex(mBSoft.row(i).dot(mB1.row(mBcSoft(i))), mBSoft.row(i).dot(mB2.row(mBcSoft(i))));
             softValuesMat(i, 0) = std::pow(mWSoft(i, 0) * bComplex, N);
-            softWeightsMat(i, 0) = std::complex<double>(mWSoft(i, 0), 0);
+            softWeightsMat(i, 0) = std::complex<double>(mWSoft(i, 0), mWSoft(i, 0));
           }
         }
         else
@@ -115,7 +115,7 @@ namespace directional
             {
               Eigen::RowVector3d vec = mBSoft.block(i, 3 * n, 1, 3);
               roots(n) = mWSoft(i, n) * std::complex<double>(vec.dot(mB1.row(mBcSoft(i))), vec.dot(mB2.row(mBcSoft(i))));
-              softWeightsMat(i, n) = std::complex<double>(mWSoft(i, n), 0);
+              softWeightsMat(i, n) = std::complex<double>(mWSoft(i, n), mWSoft(i, n));
             }
             roots_to_monicPolynomial(roots, poly);
             softValuesMat.row(i) << poly.head(N);
