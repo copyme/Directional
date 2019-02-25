@@ -94,7 +94,7 @@ namespace directional
       {
         Eigen::MatrixXcd softValuesMat(mBSoft.rows(), N);
         Eigen::MatrixXcd softWeightsMat(mBSoft.rows(), N);
-        assert((mB.cols() == 3 * N) || (mB.cols() == 3));
+        assert((mBSoft.cols() == 3 * N) || (mBSoft.cols() == 3));
         if(mBSoft.cols() == 3)  //N-RoSy constraint
         {
           softValuesMat.setZero();
@@ -186,7 +186,7 @@ namespace directional
          mAVar.setFromTriplets(AVarTriplets.begin(), AVarTriplets.end());
 
          // setup the soft term
-         Eigen::VectorXcd soft(N * (mB1.rows() - mBc.size()), 1);
+         Eigen::VectorXcd soft(N * mB1.rows(), 1);
          soft.setZero();
          for(size_t i = 0; i < softIndices.size(); i++)
            soft(softIndices(i)) = softWeights(i);
@@ -270,7 +270,7 @@ namespace directional
            throw std::runtime_error("directional::PolyVectorComputer: The soft constraines data are inconsistant!");
 
          this->N = N;
-         mAlpha = 0.75;
+         mAlpha = 0.2;
        }
 
         // Precalculate the polyvector LDLt solvers. Must be recalculated whenever
@@ -281,7 +281,9 @@ namespace directional
         IGL_INLINE void precompute(const Eigen::MatrixXi & EV,
                                    const Eigen::MatrixXi & EF)
         {
-          treatHardConstraints();
+          if(mB.rows() > 0)
+            treatHardConstraints();
+          if(mBSoft.rows() > 0)
           treatSoftConstraints();
           variablesMask();
           tagVariables();
