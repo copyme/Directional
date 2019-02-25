@@ -32,7 +32,7 @@ namespace directional
 
        Eigen::VectorXi softIndices;
        Eigen::VectorXcd softValues;
-       Eigen::VectorXd softWeights;
+       Eigen::VectorXcd softWeights;
 
        Eigen::VectorXi varMask;
        Eigen::VectorXi full2var;
@@ -47,7 +47,7 @@ namespace directional
        const Eigen::MatrixXd & mB;
 
        const Eigen::VectorXi & mBcSoft;
-       const Eigen::VectorXd & mWSoft;
+       const Eigen::MatrixXd & mWSoft;
        const Eigen::MatrixXd & mBSoft;
 
        Eigen::SparseMatrix<std::complex<double> > & mAfull;
@@ -93,13 +93,17 @@ namespace directional
       void treatSoftConstraints()
       {
         Eigen::MatrixXcd softValuesMat(mBSoft.rows(), N);
+        Eigen::MatrixXcd softWeightsMat(mBSoft.rows(), N);
+        assert((mB.cols() == 3 * N) || (mB.cols() == 3));
         if(mBSoft.cols() == 3)  //N-RoSy constraint
         {
           softValuesMat.setZero();
+          softWeightsMat.setZero();
           for(unsigned int i = 0; i < mBSoft.rows(); i++)
           {
             std::complex<double> bComplex(mBSoft.row(i).dot(mB1.row(mBcSoft(i))), mBSoft.row(i).dot(mB2.row(mBcSoft(i))));
-            softValuesMat(i, 0) = std::pow(mWSoft(i) * bComplex, N);
+            softValuesMat(i, 0) = std::pow(mWSoft(i, 0) * bComplex, N);
+            softWeightsMat(i, 0) = std::complex<double>(mWSoft(i, 0), 0);
           }
         }
         else
@@ -110,7 +114,8 @@ namespace directional
             for(unsigned int n = 0; n < N; n++)
             {
               Eigen::RowVector3d vec = mBSoft.block(i, 3 * n, 1, 3);
-              roots(n) = mWSoft(i) * std::complex<double>(vec.dot(mB1.row(mBcSoft(i))), vec.dot(mB2.row(mBcSoft(i))));
+              roots(n) = mWSoft(i, n) * std::complex<double>(vec.dot(mB1.row(mBcSoft(i))), vec.dot(mB2.row(mBcSoft(i))));
+              softWeightsMat(i, n) = std::complex<double>(mWSoft(i, n), 0);
             }
             roots_to_monicPolynomial(roots, poly);
             softValuesMat.row(i) << poly.head(N);
@@ -122,7 +127,7 @@ namespace directional
         for(unsigned int n = 0; n < N; n++)
         {
           softIndices.segment(mBcSoft.rows() * n, mBcSoft.rows()) = mBcSoft.array() + n * mB1.rows();
-          softWeights.segment(mWSoft.rows() * n, mWSoft.rows()) = mWSoft.array() + n * mB1.rows();
+          softWeights.segment(mWSoft.rows() * n, mWSoft.rows()) = softWeightsMat.col(n);
           softValues.segment(mBSoft.rows() * n, mBSoft.rows()) = softValuesMat.col(n);
         }
        }
@@ -174,25 +179,26 @@ namespace directional
          mAfull *= (1. - mAlpha);
 
          std::vector<Eigen::Triplet<std::complex<double> > > AVarTriplets;
-         for (unsigned int i = 0; i < AfullTriplets.size(); i++)
+         for(size_t i = 0; i < AfullTriplets.size(); i++)
            if(full2var(AfullTriplets[i].col()) != -1)
              AVarTriplets.emplace_back(AfullTriplets[i].row(), full2var(AfullTriplets[i].col()), AfullTriplets[i].value());
          mAVar.conservativeResize(rowCounter, N * (mB1.rows() - mBc.size()));
          mAVar.setFromTriplets(AVarTriplets.begin(), AVarTriplets.end());
 
-         Eigen::VectorXcd soft(N * mB1.rows(), 1);
+         // setup the soft term
+         Eigen::VectorXcd soft(N * (mB1.rows() - mBc.size()), 1);
          soft.setZero();
          for(size_t i = 0; i < softIndices.size(); i++)
            soft(softIndices(i)) = softWeights(i);
 
          std::vector<Eigen::Triplet<std::complex<double> > > TSoft;
-         for(unsigned int i = 0; i < N * mB1.rows(); i++)
-           if(full2var(i) != -1)
-             TSoft.emplace_back(full2var(i), full2var(i), soft[i]);
+         for(size_t i = 0; i < AVarTriplets.size(); i++)
+           if(soft(AVarTriplets[i].col()) != std::complex<double>(0., 0.))
+             TSoft.emplace_back(AVarTriplets[i].row(), AVarTriplets[i].col(), soft(AVarTriplets[i].col()));
 
          Eigen::SparseMatrix<std::complex<double> > ASoft(rowCounter, N * (mB1.rows() - mBc.size()));
          ASoft.setFromTriplets(TSoft.begin(), TSoft.end());
-         mAVar = mAVar + mAlpha * ASoft;
+         mAVar += mAlpha * ASoft;
        }
 
        void evalNoHardConstraints(Eigen::MatrixXcd& polyVectorField)
@@ -248,7 +254,7 @@ namespace directional
                           const Eigen::VectorXi & bc,
                           const Eigen::MatrixXd & b,
                           const Eigen::VectorXi & bcSoft,
-                          const Eigen::VectorXd & wSoft,
+                          const Eigen::MatrixXd & wSoft,
                           const Eigen::MatrixXd & bSoft,
                           Eigen::SimplicialLDLT<Eigen::SparseMatrix<std::complex<double> > > & solver,
                           Eigen::SparseMatrix<std::complex<double> > & Afull,
@@ -264,7 +270,7 @@ namespace directional
            throw std::runtime_error("directional::PolyVectorComputer: The soft constraines data are inconsistant!");
 
          this->N = N;
-         mAlpha = 0.;
+         mAlpha = 0.75;
        }
 
         // Precalculate the polyvector LDLt solvers. Must be recalculated whenever
@@ -302,7 +308,12 @@ namespace directional
          for(size_t i = 0; i < constIndices.size(); i++)
            torhs(constIndices(i)) = constValues(i);
 
-         Eigen::VectorXcd rhs = -mAVar.adjoint() * mAfull * torhs;
+         Eigen::VectorXcd torhsSoft(N * mB1.rows(), 1);
+         torhsSoft.setZero();
+         for(size_t i = 0; i < softIndices.size(); i++)
+           torhsSoft(softIndices(i)) = softValues(i);
+
+         Eigen::VectorXcd rhs = -mAVar.adjoint() * mAfull * ((1. - mAlpha) * torhs + mAlpha * torhsSoft);
          Eigen::VectorXcd varFieldVector = mSolver.solve(rhs);
          if (mSolver.info() != Eigen::Success)
            throw std::runtime_error("directional::PolyVectorComputer::eval: Solving the system finished with a failure!");
@@ -331,7 +342,8 @@ namespace directional
   // Inputs:
   //  B1, B2:       #F by 3 matrices representing the local base of each face.
   //  bc:           The faces on which the polyvector is prescribed.
-  //  b:            The directionals on the faces indicated by bc. Should be given in either #bc by N raw format X1,Y1,Z1,X2,Y2,Z2,Xn,Yn,Zn, or representative #bc by 3 format (single xyz), implying N-RoSy
+  //  b:            The directionals on the faces indicated by bc. Should be given in either
+  //  #bc by N raw format X1,Y1,Z1,X2,Y2,Z2,Xn,Yn,Zn, or representative #bc by 3 format (single xyz), implying N-RoSy
   //  solver:       With prefactorized left-hand side
   //  Afull, AVar:  Left-hand side matrices (with and without constraints) of the system
   //  N:            The degree of the field.
@@ -342,11 +354,10 @@ namespace directional
                                    const Eigen::VectorXi & bc,
                                    const Eigen::MatrixXd & b,
                                    const Eigen::VectorXi & bcSoft,
-                                   const Eigen::VectorXd & wSoft,
+                                   const Eigen::MatrixXd & wSoft,
                                    const Eigen::MatrixXd & bSoft,
                                    const unsigned int N,
                                    Eigen::MatrixXcd& polyVectorField)
-
   {
     Eigen::MatrixXi EV, xi, EF;
     igl::edge_topology(V, F, EV, xi, EF);
@@ -366,7 +377,6 @@ namespace directional
                                    const Eigen::MatrixXd & b,
                                    const unsigned int N,
                                    Eigen::MatrixXcd& polyVectorField)
-
   {
     Eigen::MatrixXi EV, xi, EF;
     igl::edge_topology(V, F, EV, xi, EF);
@@ -375,14 +385,9 @@ namespace directional
     Eigen::SparseMatrix<std::complex<double> > Afull, AVar;
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<std::complex<double> > > solver;
 
-    Eigen::VectorXi bcSoft(1);
-    Eigen::VectorXd wSoft(1);
-    Eigen::MatrixXd bSoft(1, 3);
-
-    // Contrain one face
-    bcSoft << 0;
-    wSoft << 1.0;
-    bSoft << 1, 0, 0;
+    Eigen::VectorXi bcSoft;
+    Eigen::MatrixXd wSoft;
+    Eigen::MatrixXd bSoft;
 
     PolyVectorComputer pvComputer(V, B1, B2, bc, b, bcSoft, wSoft, bSoft, solver, Afull, AVar, N);
     pvComputer.precompute(EV, EF);
