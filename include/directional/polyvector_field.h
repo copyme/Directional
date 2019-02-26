@@ -8,6 +8,7 @@
 #ifndef DIRECTIONAL_POLYVECTOR_FIELD_H
 #define DIRECTIONAL_POLYVECTOR_FIELD_H
 
+#include <iterator>
 #include <complex>
 #include <cmath>
 #include <stdexcept>
@@ -26,6 +27,14 @@ namespace directional
 {
     class PolyVectorComputer
     {
+    // Type definitions
+    public:
+      typedef Eigen::SparseMatrix<std::complex<double> > SparseMatrix;
+      typedef Eigen::Triplet<std::complex<double> > Triplet;
+      typedef std::vector<Triplet> TContainer;
+      typedef TContainer::const_iterator TCConstIterator;
+      typedef std::back_insert_iterator<TContainer> OutputIterator;
+
     private:
        Eigen::VectorXi constIndices;
        Eigen::VectorXcd constValues;
@@ -50,9 +59,9 @@ namespace directional
        const Eigen::MatrixXd & mWSoft;
        const Eigen::MatrixXd & mBSoft;
 
-       Eigen::SparseMatrix<std::complex<double> > & mAfull;
-       Eigen::SparseMatrix<std::complex<double> > & mAVar;
-       Eigen::SimplicialLDLT<Eigen::SparseMatrix<std::complex<double> > > & mSolver;
+       SparseMatrix & mAfull;
+       SparseMatrix & mAVar;
+       Eigen::SimplicialLDLT<SparseMatrix> & mSolver;
 
        void treatHardConstraints()
        {
@@ -94,7 +103,9 @@ namespace directional
       {
         Eigen::MatrixXcd softValuesMat(mBSoft.rows(), N);
         Eigen::MatrixXcd softWeightsMat(mBSoft.rows(), N);
-        assert((mBSoft.cols() == 3 * N) || (mBSoft.cols() == 3));
+        if(!((mBSoft.cols() == 3 * N) || (mBSoft.cols() == 3)) || !((mWSoft.cols() == N) || (mWSoft.cols() == 1)))
+          throw std::runtime_error("directional::PolyVectorComputer:::treatSoftConstraints: Missing information!");
+
         if(mBSoft.cols() == 3)  //N-RoSy constraint
         {
           softValuesMat.setZero();
@@ -103,7 +114,7 @@ namespace directional
           {
             std::complex<double> bComplex(mBSoft.row(i).dot(mB1.row(mBcSoft(i))), mBSoft.row(i).dot(mB2.row(mBcSoft(i))));
             softValuesMat(i, 0) = std::pow(mWSoft(i, 0) * bComplex, N);
-            softWeightsMat(i, 0) = std::complex<double>(mWSoft(i, 0), mWSoft(i, 0));
+            softWeightsMat(i, 0) = std::complex<double>(mWSoft(i, 0), 0);
           }
         }
         else
@@ -115,7 +126,7 @@ namespace directional
             {
               Eigen::RowVector3d vec = mBSoft.block(i, 3 * n, 1, 3);
               roots(n) = mWSoft(i, n) * std::complex<double>(vec.dot(mB1.row(mBcSoft(i))), vec.dot(mB2.row(mBcSoft(i))));
-              softWeightsMat(i, n) = std::complex<double>(mWSoft(i, n), mWSoft(i, n));
+              softWeightsMat(i, n) = std::complex<double>(mWSoft(i, n), 0);
             }
             roots_to_monicPolynomial(roots, poly);
             softValuesMat.row(i) << poly.head(N);
@@ -150,11 +161,10 @@ namespace directional
         assert(varCounter == N * (mB1.rows() - mBc.size()));
       }
 
-       void buildEnergyMatrix(const Eigen::MatrixXi & EV, const Eigen::MatrixXi & EF)
-       {
+      unsigned int buildFullEnergyMatrix(const Eigen::MatrixXi & EV, const Eigen::MatrixXi & EF, OutputIterator result)
+      {
          unsigned int rowCounter = 0;
          // Build the sparse matrix, with an energy term for each edge and degree
-         std::vector<Eigen::Triplet<std::complex<double> > > AfullTriplets;
          for(unsigned int n = 0; n < N; n++)
          {
            for(unsigned int i = 0; i < EF.rows(); i++)
@@ -170,73 +180,88 @@ namespace directional
              std::complex<double> eg(veg(0), veg(1));
 
              // Add the term conj(f)^n*ui - conj(g)^n*uj to the energy matrix
-             AfullTriplets.emplace_back(rowCounter, n * mB1.rows() + EF(i, 0), std::pow(conj(ef), N - n));
-             AfullTriplets.emplace_back(rowCounter++, n * mB1.rows() + EF(i, 1), -1. * std::pow(conj(eg), N - n));
+             *result++ = Triplet(rowCounter, n * mB1.rows() + EF(i, 0), std::pow(conj(ef), N - n));
+             *result++ = Triplet(rowCounter++, n * mB1.rows() + EF(i, 1), -1. * std::pow(conj(eg), N - n));;
            }
          }
-         mAfull.conservativeResize(rowCounter, N * mB1.rows());
-         mAfull.setFromTriplets(AfullTriplets.begin(), AfullTriplets.end());
-         mAfull *= (1. - mAlpha);
+         return rowCounter;
+      }
 
-         std::vector<Eigen::Triplet<std::complex<double> > > AVarTriplets;
-         for(size_t i = 0; i < AfullTriplets.size(); i++)
-           if(full2var(AfullTriplets[i].col()) != -1)
-             AVarTriplets.emplace_back(AfullTriplets[i].row(), full2var(AfullTriplets[i].col()), AfullTriplets[i].value());
-         mAVar.conservativeResize(rowCounter, N * (mB1.rows() - mBc.size()));
-         mAVar.setFromTriplets(AVarTriplets.begin(), AVarTriplets.end());
+      void extractVarPartOfEnergy(TCConstIterator begin, TCConstIterator end, OutputIterator result)
+      {
+        for(auto it = begin; it != end; ++it)
+          if(full2var(it->col()) != -1)
+            *result++ = Triplet(it->row(), full2var(it->col()), it->value());
+      }
 
-         // setup the soft term
-         Eigen::VectorXcd soft(N * mB1.rows(), 1);
-         soft.setZero();
-         for(size_t i = 0; i < softIndices.size(); i++)
-           soft(softIndices(i)) = softWeights(i);
+      void buildSoftConstraintsEnergyMatrix(TCConstIterator begin, TCConstIterator end, OutputIterator result)
+      {
+        Eigen::VectorXcd soft(N * mB1.rows(), 1);
+        soft.setZero();
+        for(size_t i = 0; i < softIndices.size(); i++)
+          soft(softIndices(i)) = softWeights(i);
 
-         std::vector<Eigen::Triplet<std::complex<double> > > TSoft;
-         for(size_t i = 0; i < AVarTriplets.size(); i++)
-           if(soft(AVarTriplets[i].col()) != std::complex<double>(0., 0.))
-             TSoft.emplace_back(AVarTriplets[i].row(), AVarTriplets[i].col(), soft(AVarTriplets[i].col()));
+        for(auto it = begin; it != end; ++it)
+          if(soft(it->col()) != std::complex<double>(0., 0.))
+            *result++ = Triplet(it->row(), it->col(), soft(it->col()));
+      }
 
-         Eigen::SparseMatrix<std::complex<double> > ASoft(rowCounter, N * (mB1.rows() - mBc.size()));
-         ASoft.setFromTriplets(TSoft.begin(), TSoft.end());
-         mAVar += mAlpha * ASoft;
-       }
+      void buildEnergyMatrics(const Eigen::MatrixXi & EV, const Eigen::MatrixXi & EF)
+      {
+        TContainer AfullTriplets;
+        unsigned int rowCounter = buildFullEnergyMatrix(EV, EF, OutputIterator(AfullTriplets));
+        mAfull.conservativeResize(rowCounter, N * mB1.rows());
+        mAfull.setFromTriplets(AfullTriplets.cbegin(), AfullTriplets.cend());
+        mAfull *= (1. - mAlpha);
 
-       void evalNoHardConstraints(Eigen::MatrixXcd& polyVectorField)
-       {
-         //extracting first eigenvector into the field
-         //Have to use reals because libigl does not currently support complex eigs.
-         Eigen::SparseMatrix<double> M;
-         igl::speye(2 * mB1.rows(), 2 * mB1.rows(), M);
-         //creating a matrix of only the N-rosy interpolation
-         Eigen::SparseMatrix<std::complex<double> > AfullNRosy(int((double)mAfull.rows() / (double)N), int((double)mAfull.cols() / (double)N));
+        TContainer AVarTriplets;
+        extractVarPartOfEnergy(AfullTriplets.cbegin(), AfullTriplets.cend(), OutputIterator(AVarTriplets));
+        mAVar.conservativeResize(rowCounter, N * (mB1.rows() - mBc.size()));
+        mAVar.setFromTriplets(AVarTriplets.cbegin(), AVarTriplets.cend());
 
-         std::vector<Eigen::Triplet<std::complex<double> > > AfullNRosyTriplets;
-         for(int k = 0; k < mAfull.outerSize(); ++k)
-           for(Eigen::SparseMatrix<std::complex<double> >::InnerIterator it(mAfull, k); it; ++it)
-             if((it.row() < (double)mAfull.rows() / (double)N) && (it.col() < (double)mAfull.cols() / (double)N))
-               AfullNRosyTriplets.emplace_back(it.row(), it.col(), it.value());
+        TContainer TSoft;
+        buildSoftConstraintsEnergyMatrix(AVarTriplets.cbegin(), AVarTriplets.cend(), OutputIterator(TSoft));
+        SparseMatrix ASoft(rowCounter, N * (mB1.rows() - mBc.size()));
+        ASoft.setFromTriplets(TSoft.cbegin(), TSoft.cend());
+        mAVar += mAlpha * ASoft;
+      }
 
-         AfullNRosy.setFromTriplets(AfullNRosyTriplets.begin(), AfullNRosyTriplets.end());
+      void evalNoConstraints(Eigen::MatrixXcd &polyVectorField)
+      {
+        //extracting first eigenvector into the field
+        //Have to use reals because libigl does not currently support complex eigs.
+        Eigen::SparseMatrix<double> M;
+        igl::speye(2 * mB1.rows(), 2 * mB1.rows(), M);
+        //creating a matrix of only the N-rosy interpolation
+        SparseMatrix AfullNRosy(int((double)mAfull.rows() / (double)N), int((double)mAfull.cols() / (double)N));
 
-         Eigen::SparseMatrix<std::complex<double>> LComplex = AfullNRosy.adjoint() * AfullNRosy;
-         Eigen::SparseMatrix<double> L(2 * mB1.rows(), 2 * mB1.rows());
-         std::vector<Eigen::Triplet<double> > LTriplets;
-         for (unsigned int k = 0; k < LComplex.outerSize(); ++k)
-           for(Eigen::SparseMatrix<std::complex<double> >::InnerIterator it(LComplex, k); it; ++it)
-           {
-             LTriplets.emplace_back(it.row(), it.col(), it.value().real());
-             LTriplets.emplace_back(it.row(), LComplex.cols()+it.col(), -it.value().imag());
-             LTriplets.emplace_back(LComplex.rows()+it.row(), it.col(), it.value().imag());
-             LTriplets.emplace_back(LComplex.rows()+it.row(), LComplex.cols()+it.col(), it.value().real());
-           }
-         L.setFromTriplets(LTriplets.begin(), LTriplets.end());
-         Eigen::MatrixXd U;
-         Eigen::VectorXd S;
-         igl::eigs(L, M, 5, igl::EIGS_TYPE_SM, U, S);
+        TContainer AfullNRosyTriplets;
+        for(int k = 0; k < mAfull.outerSize(); ++k)
+          for(SparseMatrix::InnerIterator it(mAfull, k); it; ++it)
+            if((it.row() < (double)mAfull.rows() / (double)N) && (it.col() < (double)mAfull.cols() / (double)N))
+              AfullNRosyTriplets.emplace_back(it.row(), it.col(), it.value());
 
-         polyVectorField = Eigen::MatrixXcd::Constant(mB1.rows(), N, std::complex<double>());
-         polyVectorField.col(0) = U.block(0, 0, (long int)((double)U.rows() / 2.), 1).cast<std::complex<double> >().array() * std::complex<double>(1., 0.) +
-                                  U.block(int((double)U.rows() / 2.), 0, int((double)U.rows() / 2.), 1).cast<std::complex<double> >().array() * std::complex<double>(0., 1.);
+        AfullNRosy.setFromTriplets(AfullNRosyTriplets.begin(), AfullNRosyTriplets.end());
+
+        SparseMatrix LComplex = AfullNRosy.adjoint() * AfullNRosy;
+        Eigen::SparseMatrix<double> L(2 * mB1.rows(), 2 * mB1.rows());
+        std::vector<Eigen::Triplet<double> > LTriplets;
+        for (unsigned int k = 0; k < LComplex.outerSize(); ++k)
+          for(SparseMatrix::InnerIterator it(LComplex, k); it; ++it)
+          {
+            LTriplets.emplace_back(it.row(), it.col(), it.value().real());
+            LTriplets.emplace_back(it.row(), LComplex.cols()+it.col(), -it.value().imag());
+            LTriplets.emplace_back(LComplex.rows()+it.row(), it.col(), it.value().imag());
+            LTriplets.emplace_back(LComplex.rows()+it.row(), LComplex.cols()+it.col(), it.value().real());
+          }
+        L.setFromTriplets(LTriplets.begin(), LTriplets.end());
+        Eigen::MatrixXd U;
+        Eigen::VectorXd S;
+        igl::eigs(L, M, 5, igl::EIGS_TYPE_SM, U, S);
+
+        polyVectorField = Eigen::MatrixXcd::Constant(mB1.rows(), N, std::complex<double>(0., 0.));
+        polyVectorField.col(0) = U.block(0, 0, (long int)((double)U.rows() / 2.), 1).cast<std::complex<double> >().array() * std::complex<double>(1., 0.) +
+                                 U.block(int((double)U.rows() / 2.), 0, int((double)U.rows() / 2.), 1).cast<std::complex<double> >().array() * std::complex<double>(0., 1.);
        }
 
     public:
@@ -270,7 +295,8 @@ namespace directional
            throw std::runtime_error("directional::PolyVectorComputer: The soft constraines data are inconsistant!");
 
          this->N = N;
-         mAlpha = 0.2;
+         if (mBcSoft.size() == 0)
+           mAlpha = 0.;
        }
 
         // Precalculate the polyvector LDLt solvers. Must be recalculated whenever
@@ -284,10 +310,10 @@ namespace directional
           if(mB.rows() > 0)
             treatHardConstraints();
           if(mBSoft.rows() > 0)
-          treatSoftConstraints();
+            treatSoftConstraints();
           variablesMask();
           tagVariables();
-          buildEnergyMatrix(EV, EF);
+          buildEnergyMatrics(EV, EF);
           mSolver.compute(mAVar.adjoint() * mAVar);
         }
 
@@ -299,9 +325,9 @@ namespace directional
        void eval(Eigen::MatrixXcd & polyVectorField)
        {
          assert(mSolver.rows() != 0);
-         if (mBc.size() == 0)
+         if (mBc.size() == 0 && mWSoft.size() == 0)
          {
-           evalNoHardConstraints(polyVectorField);
+           evalNoConstraints(polyVectorField);
            return;
          }
 
