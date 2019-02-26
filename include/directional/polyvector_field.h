@@ -297,6 +297,8 @@ namespace directional
          this->N = N;
          if (mBcSoft.size() == 0)
            mAlpha = 0.;
+         else
+           mAlpha = .5;
        }
 
         // Precalculate the polyvector LDLt solvers. Must be recalculated whenever
