@@ -91,7 +91,9 @@ namespace directional
            }
          }
          constValues.resize(N * mB.size());
+         constValues.setZero();
          constIndices.resize(N * mBc.size());
+         constIndices.setZero();
          for(unsigned int n = 0; n < N; n++)
          {
            constIndices.segment(mBc.rows() * n, mBc.rows()) = mBc.array() + n * mB1.rows();
@@ -144,15 +146,20 @@ namespace directional
         }
 
         softValues.resize(N * mBSoft.size());
-        softWeights.resize(N);
+        softValues.setZero();
+        softWeights.resize(N * mWSoft.rows());
+        softWeights.setZero();
         softIndices.resize(N * mBcSoft.size());
+        softIndices.setZero();
         for(unsigned int n = 0; n < N; n++)
         {
           softIndices.segment(mBcSoft.rows() * n, mBcSoft.rows()) = mBcSoft.array() + n * mB1.rows();
           softWeights.segment(mWSoft.rows() * n, mWSoft.rows()) = softWeightsMat.col(n);
           softValues.segment(mBSoft.rows() * n, mBSoft.rows()) = softValuesMat.col(n);
         }
+        std::cout << softWeights << std::endl;
        }
+
 
        void variablesMask()
        {
