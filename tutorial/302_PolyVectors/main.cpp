@@ -23,7 +23,11 @@ Eigen::MatrixXd rawField,representative, bc;
 Eigen::MatrixXcd pvField;
 igl::opengl::glfw::Viewer viewer;
 
-int N = 3;
+Eigen::VectorXi bcSoft;
+Eigen::MatrixXd wSoft;
+Eigen::MatrixXd bSoft;
+
+int N = 2;
 
 //User input variables
 int cur = 0;
@@ -41,7 +45,7 @@ void update_triangle_mesh()
 
 void recompute_field()
 {
-  directional::polyvector_field(VMesh, FMesh, b, bc, N, pvField);
+  directional::polyvector_field(VMesh, FMesh, b, bc, bcSoft, wSoft, bSoft,  N, pvField);
 }
 
 void update_raw_field_mesh()
@@ -201,15 +205,32 @@ int main()
   "  1          Choose vector in current face." << std::endl <<
   "  R          Reset the constraints" << std::endl <<
   "  N          Toggle field normalization" << std::endl;
-  
+
   // Load mesh
-  igl::readOFF(TUTORIAL_SHARED_PATH "/fandisk.off", VMesh, FMesh);
+  igl::readOFF("/home/kacper/Projects/libigl-tutorial-data/cube2.off", VMesh, FMesh);
   igl::edge_topology(VMesh, FMesh, EV, FE, EF);
   igl::barycenter(VMesh, FMesh, barycenters);
-  
-  b.resize(0);
-  bc.resize(0, 3*N);
-  
+
+  //b.resize(0);
+  //bc.resize(0, 3*N);
+
+  /*b.resize(1);
+  b << 0;
+  bc.resize(1,3);
+  bc << 1,1,1;
+*/
+
+  bcSoft.resize(1);
+  bcSoft << 1;
+  //wSoft.resize(1,1);
+  //wSoft << 1;
+  wSoft.resize(1,2);
+  wSoft << 1, 0.5;
+  //bSoft.resize(1, 3);
+  //bSoft << 1,1,1;
+  bSoft.resize(1,6);
+  bSoft << 1,1,1, 2, 3, 4;
+
   //triangle mesh setup
   viewer.data_list[0].set_mesh(VMesh, FMesh);
   viewer.data_list[0].set_colors(directional::default_mesh_color());

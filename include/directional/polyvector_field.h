@@ -102,19 +102,16 @@ namespace directional
       void treatSoftConstraints()
       {
         Eigen::MatrixXcd softValuesMat(mBSoft.rows(), N);
-        Eigen::MatrixXcd softWeightsMat(mBSoft.rows(), N);
+        softValuesMat.setZero();
         if(!((mBSoft.cols() == 3 * N) || (mBSoft.cols() == 3)) || !((mWSoft.cols() == N) || (mWSoft.cols() == 1)))
           throw std::runtime_error("directional::PolyVectorComputer:::treatSoftConstraints: Missing information!");
 
         if(mBSoft.cols() == 3)  //N-RoSy constraint
         {
-          softValuesMat.setZero();
-          softWeightsMat.setZero();
           for(unsigned int i = 0; i < mBSoft.rows(); i++)
           {
             std::complex<double> bComplex(mBSoft.row(i).dot(mB1.row(mBcSoft(i))), mBSoft.row(i).dot(mB2.row(mBcSoft(i))));
             softValuesMat(i, 0) = std::pow(mWSoft(i, 0) * bComplex, N);
-            softWeightsMat(i, 0) = std::complex<double>(mWSoft(i, 0), 0);
           }
         }
         else
@@ -126,14 +123,28 @@ namespace directional
             {
               Eigen::RowVector3d vec = mBSoft.block(i, 3 * n, 1, 3);
               roots(n) = mWSoft(i, n) * std::complex<double>(vec.dot(mB1.row(mBcSoft(i))), vec.dot(mB2.row(mBcSoft(i))));
-              softWeightsMat(i, n) = std::complex<double>(mWSoft(i, n), 0);
             }
             roots_to_monicPolynomial(roots, poly);
             softValuesMat.row(i) << poly.head(N);
           }
         }
+
+        Eigen::MatrixXcd softWeightsMat(mWSoft.rows(), N);
+        softWeightsMat.setZero();
+        if(mWSoft.cols() == 1)  //N-RoSy constraint
+        {
+          for(unsigned int i = 0; i < mWSoft.rows(); i++)
+            softWeightsMat(i, 0) = std::complex<double>(mWSoft(i, 0), 0);
+        }
+        else
+        {
+          for(unsigned int i = 0; i < mWSoft.rows(); i++)
+            for(unsigned int n = 0; n < N; n++)
+              softWeightsMat(i, n) = std::complex<double>(mWSoft(i, n), 0);
+        }
+
         softValues.resize(N * mBSoft.size());
-        softWeights.resize(N * mWSoft.size());
+        softWeights.resize(N);
         softIndices.resize(N * mBcSoft.size());
         for(unsigned int n = 0; n < N; n++)
         {
@@ -202,7 +213,7 @@ namespace directional
           soft(softIndices(i)) = softWeights(i);
 
         for(auto it = begin; it != end; ++it)
-          if(soft(it->col()) != std::complex<double>(0., 0.))
+          if(soft(it->col()) != 0.)
             *result++ = Triplet(it->row(), it->col(), soft(it->col()));
       }
 
