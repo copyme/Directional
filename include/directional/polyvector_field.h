@@ -43,7 +43,6 @@ namespace directional
        Eigen::VectorXcd softValues;
        Eigen::VectorXcd softWeights;
 
-       Eigen::VectorXi varMask;
        Eigen::VectorXi full2var;
 
        unsigned int N;
@@ -61,6 +60,7 @@ namespace directional
 
        SparseMatrix & mAfull;
        SparseMatrix & mAVar;
+       SparseMatrix mASoft;
        Eigen::SimplicialLDLT<SparseMatrix> & mSolver;
 
        void treatHardConstraints()
@@ -157,20 +157,15 @@ namespace directional
           softWeights.segment(mWSoft.rows() * n, mWSoft.rows()) = softWeightsMat.col(n);
           softValues.segment(mBSoft.rows() * n, mBSoft.rows()) = softValuesMat.col(n);
         }
-        std::cout << softWeights << std::endl;
-       }
-
-
-       void variablesMask()
-       {
-         //removing columns pertaining to constant indices
-         varMask = Eigen::VectorXi::Constant(N * mB1.rows(), 1);
-         for (unsigned int i = 0; i < constIndices.size(); i++)
-           varMask(constIndices(i)) = 0;
        }
 
       void tagVariables()
       {
+        //removing columns pertaining to constant indices
+        Eigen::VectorXi varMask = Eigen::VectorXi::Constant(N * mB1.rows(), 1);
+        for (unsigned int i = 0; i < constIndices.size(); i++)
+          varMask(constIndices(i)) = 0;
+
         full2var = Eigen::VectorXi::Constant(N * mB1.rows(), -1);
         unsigned int varCounter = 0;
         for (unsigned int i = 0; i < N * mB1.rows(); i++)
@@ -198,8 +193,12 @@ namespace directional
              std::complex<double> eg(veg(0), veg(1));
 
              // Add the term conj(f)^n*ui - conj(g)^n*uj to the energy matrix
-             *result++ = Triplet(rowCounter, n * mB1.rows() + EF(i, 0), std::pow(conj(ef), N - n));
-             *result++ = Triplet(rowCounter++, n * mB1.rows() + EF(i, 1), -1. * std::pow(conj(eg), N - n));;
+             // ensure the sign consistance over the soft constraints
+             *result++ = Triplet(rowCounter, n * mB1.rows() + EF(i, 0),  std::pow(conj(ef), N - n));
+             if((softIndices.array() == EF(i, 0)).any() || (softIndices.array() == EF(i, 1)).any())
+                 *result++ = Triplet(rowCounter++, n * mB1.rows() + EF(i, 1), std::pow(conj(eg), N - n));
+             else
+                 *result++ = Triplet(rowCounter++, n * mB1.rows() + EF(i, 1), -1. * std::pow(conj(eg), N - n));
            }
          }
          return rowCounter;
@@ -212,16 +211,16 @@ namespace directional
             *result++ = Triplet(it->row(), full2var(it->col()), it->value());
       }
 
-      void buildSoftConstraintsEnergyMatrix(TCConstIterator begin, TCConstIterator end, OutputIterator result)
+      void buildSoftConstraintsEnergyMatrix(OutputIterator result)
       {
         Eigen::VectorXcd soft(N * mB1.rows(), 1);
         soft.setZero();
         for(size_t i = 0; i < softIndices.size(); i++)
           soft(softIndices(i)) = softWeights(i);
 
-        for(auto it = begin; it != end; ++it)
-          if(soft(it->col()) != 0.)
-            *result++ = Triplet(it->row(), it->col(), soft(it->col()));
+        for(unsigned int i = 0; i < full2var.rows(); i++)
+          if(full2var(i) != -1 && soft(i) != 0.)
+            *result++ = Triplet(full2var(i), full2var(i), soft(i));
       }
 
       void buildEnergyMatrics(const Eigen::MatrixXi & EV, const Eigen::MatrixXi & EF)
@@ -230,7 +229,6 @@ namespace directional
         unsigned int rowCounter = buildFullEnergyMatrix(EV, EF, OutputIterator(AfullTriplets));
         mAfull.conservativeResize(rowCounter, N * mB1.rows());
         mAfull.setFromTriplets(AfullTriplets.cbegin(), AfullTriplets.cend());
-        mAfull *= (1. - mAlpha);
 
         TContainer AVarTriplets;
         extractVarPartOfEnergy(AfullTriplets.cbegin(), AfullTriplets.cend(), OutputIterator(AVarTriplets));
@@ -238,10 +236,9 @@ namespace directional
         mAVar.setFromTriplets(AVarTriplets.cbegin(), AVarTriplets.cend());
 
         TContainer TSoft;
-        buildSoftConstraintsEnergyMatrix(AVarTriplets.cbegin(), AVarTriplets.cend(), OutputIterator(TSoft));
-        SparseMatrix ASoft(rowCounter, N * (mB1.rows() - mBc.size()));
-        ASoft.setFromTriplets(TSoft.cbegin(), TSoft.cend());
-        mAVar += mAlpha * ASoft;
+        buildSoftConstraintsEnergyMatrix(OutputIterator(TSoft));
+        mASoft.resize(N * (mB1.rows() - mBc.size()), N * (mB1.rows() - mBc.size()));
+        mASoft.setFromTriplets(TSoft.cbegin(), TSoft.cend());
       }
 
       void evalNoConstraints(Eigen::MatrixXcd &polyVectorField)
@@ -331,10 +328,10 @@ namespace directional
             treatHardConstraints();
           if(mBSoft.rows() > 0)
             treatSoftConstraints();
-          variablesMask();
           tagVariables();
           buildEnergyMatrics(EV, EF);
-          mSolver.compute(mAVar.adjoint() * mAVar);
+
+          mSolver.compute(mAVar.adjoint() * mAVar + mASoft);
         }
 
         // Computes a polyvector on the entire mesh from given values at the prescribed indices.
@@ -361,7 +358,7 @@ namespace directional
          for(size_t i = 0; i < softIndices.size(); i++)
            torhsSoft(softIndices(i)) = softValues(i);
 
-         Eigen::VectorXcd rhs = -mAVar.adjoint() * mAfull * ((1. - mAlpha) * torhs + mAlpha * torhsSoft);
+         Eigen::VectorXcd rhs = -mAVar.adjoint() * mAfull * (torhs + torhsSoft);
          Eigen::VectorXcd varFieldVector = mSolver.solve(rhs);
          if (mSolver.info() != Eigen::Success)
            throw std::runtime_error("directional::PolyVectorComputer::eval: Solving the system finished with a failure!");
