@@ -320,9 +320,6 @@ namespace directional
    L.setFromTriplets(LTriplets.begin(), LTriplets.end());
    Eigen::MatrixXd U;
    Eigen::VectorXd S;
-   std::cout << L << std::endl << std::endl;
-   std::cout << M << std::endl << std::endl;
-   exit(1);
    igl::eigs(L, M, 5, igl::EIGS_TYPE_SM, U, S);
 
    polyVectorField = Eigen::MatrixXcd::Constant(mB1.rows(), N, std::complex<double>(0., 0.));
