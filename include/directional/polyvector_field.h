@@ -5,56 +5,59 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
 
+
 #ifndef DIRECTIONAL_POLYVECTOR_FIELD_H
 #define DIRECTIONAL_POLYVECTOR_FIELD_H
 
-#include <iterator>
-#include <complex>
-#include <cmath>
-#include <stdexcept>
-#include <Eigen/Geometry>
-#include <Eigen/Sparse>
-#include <Eigen/SparseCholesky>
-#include <Eigen/Eigenvalues>
-#include <unsupported/Eigen/Polynomials>
-#include <igl/triangle_triangle_adjacency.h>
-#include <igl/local_basis.h>
-#include <igl/edge_topology.h>
-#include <igl/speye.h>
-#include <igl/eigs.h>
+#include <Eigen/Core>
 
 namespace directional
 {
-  // Computes a polyvector on the entire mesh from given values at the prescribed indices.
-  // polyvector_precompute must be called in advance, and "b" must be on the given "bc"
-  // If no constraints are given the Fielder eigenvector field will be returned.
-  // Inputs:
-  //  B1, B2:       #F by 3 matrices representing the local base of each face.
-  //  bc:           The faces on which the polyvector is prescribed.
-  //  b:            The directionals on the faces indicated by bc. Should be given in either
-  //  #bc by N raw format X1,Y1,Z1,X2,Y2,Z2,Xn,Yn,Zn, or representative #bc by 3 format (single xyz), implying N-RoSy
-  //  solver:       With prefactorized left-hand side
-  //  Afull, AVar:  Left-hand side matrices (with and without constraints) of the system
-  //  N:            The degree of the field.
-  // Outputs:
-  //  polyVectorField: #F by N The output interpolated field, in polyvector (complex polynomial) format.
+  /**
+   * Computes a polyvector on the entire mesh from given values at the prescribed indices.
+   * If no constraints (hard/soft) are given the Fielder eigenvector field will be returned.
+   *
+   * @param[in]  vertices #V by 3 list of the vertex positions
+   * @param[in]  faces #F by 3 list of the faces
+   * @param[in]  hardConstrID list of constrained faces' IDs. The number of rows must be equal
+   *             to the number of rows of hardConstrDir.
+   * @param[in]  hardConstrDir a list of constrained directions at the faces given in hardConstrIndices.
+   *             Should be given in either as a matrix of size: no. of constrained faces by N, i.e.,
+   *             X1, Y1, Z1, X2, Y2, Z2, Xn, Yn, Zn, or as a matrix of size: number of constrained face
+   *             by 3, i.e., a single direction per row, implying N-RoSy. The number of rows must be equal
+   *             to the number of rows in hardConstrIndices.
+   * @param[in]  softConstrID list of constrained faces' IDs. The number of rows must be equal
+   *             to the number of rows in softConstrWeights and softConstrDir.
+   * @param[in]  softConstrWeights weights for the soft constraints. It can be given either as a matrix of size: no. of
+   *             constrained face times N, or as a matrix of size number of constrained faces times 1. The number of
+   *             rows must be equal to the number of rows in softConstrID and softConstrDir.
+   * @param[in]  softConstrDir a list of constrained directions at the faces given in hardConstrIndices.
+   *             Should be given in either as a matrix of size: no. of constrained faces by N, i.e.,
+   *             X1, Y1, Z1, X2, Y2, Z2, Xn, Yn, Zn, or as a matrix of size: number of constrained face
+   *             by 3, i.e., a single direction per row, implying N-RoSy. The number of
+   *             rows must be equal to the number of rows in softConstrID and softConstrWeights.
+   * @param[in]  N the degree of the field
+   * @param[out] polyVectorField the output interpolated field, in polyvector (complex polynomial) format.
+   *             The size of the output is the number of faces times N.
+   */
+  IGL_INLINE void polyvector_field(const Eigen::MatrixXd & vertices,
+                                   const Eigen::MatrixXi & faces,
+                                   const Eigen::VectorXi & hardConstrIndices,
+                                   const Eigen::MatrixXd & hardConstrDir,
+                                   const Eigen::VectorXi & softConstrID,
+                                   const Eigen::MatrixXd & softConstrWeights,
+                                   const Eigen::MatrixXd & softConstrDir,
+                                   unsigned int N,
+                                   Eigen::MatrixXcd & polyVectorField);
+
+
+
   IGL_INLINE void polyvector_field(const Eigen::MatrixXd & V,
                                    const Eigen::MatrixXi & F,
                                    const Eigen::VectorXi & bc,
                                    const Eigen::MatrixXd & b,
-                                   const Eigen::VectorXi & bcSoft,
-                                   const Eigen::MatrixXd & wSoft,
-                                   const Eigen::MatrixXd & bSoft,
-                                   const unsigned int N,
-                                   Eigen::MatrixXcd& polyVectorField);
-
-
-  IGL_INLINE void polyvector_field(const Eigen::MatrixXd & V,
-                                   const Eigen::MatrixXi & F,
-                                   const Eigen::VectorXi & bc,
-                                   const Eigen::MatrixXd & b,
-                                   const unsigned int N,
-                                   Eigen::MatrixXcd& polyVectorField);
+                                   unsigned int N,
+                                   Eigen::MatrixXcd & polyVectorField);
 }
 
 #include "polyvector_field.cpp"
