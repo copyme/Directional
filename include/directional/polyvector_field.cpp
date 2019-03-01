@@ -33,51 +33,164 @@ namespace directional
 
     // ----------------------- Types ------------------------------
   public:
+    /// Sparse and complex valued matrix type
     typedef Eigen::SparseMatrix<std::complex<double> > SparseMatrix;
+    /// An alias over a  complex valued triplet
     typedef Eigen::Triplet<std::complex<double> > Triplet;
+    /// Container type storing triplets. It has to support a random access and back inserter iterators
     typedef std::vector<Triplet> TContainer;
+    /// A random, const iterator over a container storing triplets
     typedef TContainer::const_iterator TCConstIterator;
+    /// A back inserter over a container storing triplets
     typedef std::back_insert_iterator<TContainer> OutputIterator;
 
 
     // ----------------------- Standard services ------------------------------
   public:
-    PolyVectorComputer(const Eigen::MatrixXd &V,
-                       const Eigen::MatrixXd &B1,
-                       const Eigen::MatrixXd &B2,
-                       const Eigen::VectorXi &bc,
-                       const Eigen::MatrixXd &b,
-                       const Eigen::VectorXi &bcSoft,
-                       const Eigen::MatrixXd &wSoft,
-                       const Eigen::MatrixXd &bSoft,
+    /**
+     *
+     * @param vertices #V by 3 list of the vertex positions
+     * @param B1 each row represent a vector of the local coordinate basis at the respective face identified
+     *        by the row number. Each such vector is orthogonal to a respective vector in B2.
+     * @param B2 each row represent a vector of the local coordinate basis at the respective face identified
+     *        by the row number. Each such vector is orthogonal to a respective vector in B1.
+     * @param hardConstrIDs list of constrained faces' IDs. The number of rows must be equal
+     *        to the number of rows of hardConstrDir.
+     * @param hardConstrDir a list of constrained directions at the faces given in hardConstrIndices.
+     *        Should be given in either as a matrix of size: no. of constrained faces by N, i.e.,
+     *        X1, Y1, Z1, X2, Y2, Z2, Xn, Yn, Zn, or as a matrix of size: number of constrained face
+     *        by 3, i.e., a single direction per row, implying N-RoSy. The number of rows must be equal
+     *        to the number of rows in hardConstrIndices.
+     * @param softConstrIDs list of constrained faces' IDs. The number of rows must be equal
+     *        to the number of rows in softConstrWeights and softConstrDir.
+     * @param softConstrWeights weights for the soft constraints. It can be given either as a matrix of size: no. of
+     *        constrained face times N, or as a matrix of size number of constrained faces times 1. The number of
+     *        rows must be equal to the number of rows in softConstrID and softConstrDir.
+     * @param softConstrDir a list of constrained directions at the faces given in hardConstrIndices.
+     *        Should be given in either as a matrix of size: no. of constrained faces by N, i.e.,
+     *        X1, Y1, Z1, X2, Y2, Z2, Xn, Yn, Zn, or as a matrix of size: number of constrained face
+     *        by 3, i.e., a single direction per row, implying N-RoSy. The number of
+     *        rows must be equal to the number of rows in softConstrID and softConstrWeights.
+     * @param N the degree of the field
+     */
+    PolyVectorComputer(const Eigen::MatrixXd & vertices,
+                       const Eigen::MatrixXd & B1,
+                       const Eigen::MatrixXd & B2,
+                       const Eigen::VectorXi & hardConstrIDs,
+                       const Eigen::MatrixXd & hardConstrDir,
+                       const Eigen::VectorXi & softConstrIDs,
+                       const Eigen::MatrixXd & softConstrWeights,
+                       const Eigen::MatrixXd & softConstrDir,
                        unsigned int N);
 
-    // Precalculate the polyvector LDLt solvers. Must be recalculated whenever
-    // bc changes or the mesh changes.
-    // Inputs:
-    //  EV:     #E by 2 matrix of edges (vertex indices)
-    //  EF:     #E by 2 matrix of oriented adjacent faces
-    void precompute(const Eigen::MatrixXi &EV, const Eigen::MatrixXi &EF);
+    /**
+     * It builds the system and precalculate the polyvector LDLt solvers.
+     * @param EV a matrix of edges (vertex indices), its size has to be no. of edges times 2.
+     *           Each row containts IDs of vertices which constitute the edge identified by the row.
+     * @param EF a matrix of faces adjecent to edges, it size has to be no. of edges times 2.
+     *           Each row contains IDs of faces adjacent to a given edge identified with a row.
+     */
+    void precompute(const Eigen::MatrixXi & EV, const Eigen::MatrixXi & EF);
+
+    /**
+     * It solves the system and returns the field. If no constraints (hard/soft) are given the Fielder eigenvector
+     * field will be returned.
+     * @param[out] polyVectorField  the output interpolated field, in polyvector (complex polynomial) format.
+     *             The size of the output is the number of faces times N.
+     */
     void eval(Eigen::MatrixXcd &polyVectorField);
+
+    /**
+     * Destructor.
+     */
+    ~PolyVectorComputer() = default;
+
+
+    // ----------------------- Removed services ------------------------------
+  public:
+
+    /**
+     * Copy constructor.
+     * @param other the object to clone.
+     * Forbidden by default.
+     */
+    PolyVectorComputer(const PolyVectorComputer & other) = delete;
+
+
+    /**
+     * Assignment.
+     * @param other the object to copy.
+     * @return a reference on 'this'.
+     * Forbidden by default.
+     */
+    PolyVectorComputer & operator=(const PolyVectorComputer & other) = delete;
 
 
     // ------------------------- Hidden services ------------------------------
   private:
+
+    /**
+     * It is used to identify the variables i.e., terms that were not hard constrained.
+     * A vector of size: the degree of the field times number of faces, is build and each hard constrained face
+     * (identified by the row number) has value -1, and >= 0 otherwise.
+     */
     void tagVariables();
 
+    /**
+     * Builds an internal representation of the hard constraints.
+     */
     void treatHardConstraints();
 
+    /**
+     * Builds an internal representation of the soft constraints.
+     */
     void treatSoftConstraints();
 
+    /**
+     *
+     * @param EV a matrix of edges (vertex indices), its size has to be no. of edges times 2.
+     *           Each row containts IDs of vertices which constitute the edge identified by the row.
+     * @param EF a matrix of faces adjecent to edges, it size has to be no. of edges times 2.
+     *           Each row contains IDs of faces adjacent to a given edge identified with a row.
+     * @param result a back inserter iterator over a container storing Triplets.
+     * @return number of rows of the energy matrix
+     */
     unsigned int buildFullEnergyMatrix(const Eigen::MatrixXi &EV, const Eigen::MatrixXi &EF, OutputIterator result);
 
+    /**
+     * It extracts entries of the full energy matrix which corresponds to non-hard constrained faces.
+     * @param begin an interator pointing at the first element of the container storing triples which
+     *        correspond to the entries in the full energy matrix.
+     * @param end an interator pointing at the end of the container storing triples which
+     *        correspond to the entries in the full energy matrix.
+     * @param result a writtable iterator over a container storing triples which correspond to non-hard
+     *        constrained elements of the energy matrix.
+     */
     void extractVarPartOfEnergy(TCConstIterator begin, TCConstIterator end, OutputIterator result);
 
+    /**
+     * It builds a diagonal matrix with diagonal entries corresponding to weights provided with the soft constraints.
+     * @param result a writtable iterator over a container storing triples which correspond to a diagonal
+     * matrix which has at the diagonal weights provided with the soft constraints.
+     */
     void buildSoftConstraintsEnergyMatrix(OutputIterator result);
 
-    void buildEnergyMatrics(const Eigen::MatrixXi &EV, const Eigen::MatrixXi &EF);
+    /**
+     * A wrap-up method which simply calls buildFullEnergyMatrix, extractVarPartOfEnergy
+     * and buildSoftConstraintsEnergyMatrix.
+     * @param EV a matrix of edges (vertex indices), its size has to be no. of edges times 2.
+     *           Each row containts IDs of vertices which constitute the edge identified by the row.
+     * @param EF a matrix of faces adjecent to edges, it size has to be no. of edges times 2.
+     *           Each row contains IDs of faces adjacent to a given edge identified with a row.
+     */
+    void buildEnergyMatrics(const Eigen::MatrixXi & EV, const Eigen::MatrixXi & EF);
 
-    void evalNoConstraints(Eigen::MatrixXcd &polyVectorField);
+    /**
+     * Computes the Fielder eigenvector field.
+     * @param polyVectorField the output interpolated field, in polyvector (complex polynomial) format.
+     *                        The size of the output is the number of faces times N.
+     */
+    void evalNoConstraints(Eigen::MatrixXcd & polyVectorField);
 
 
     // ------------------------- Private Data --------------------------------
@@ -93,15 +206,15 @@ namespace directional
 
     unsigned int N;
 
-    const Eigen::MatrixXd & mV;
+    const Eigen::MatrixXd & mVertices;
     const Eigen::MatrixXd & mB1;
     const Eigen::MatrixXd & mB2;
-    const Eigen::VectorXi & mBc;
-    const Eigen::MatrixXd & mB;
+    const Eigen::VectorXi & mHardConstrIDs;
+    const Eigen::MatrixXd & mHardConstrDir;
 
-    const Eigen::VectorXi & mBcSoft;
-    const Eigen::MatrixXd & mWSoft;
-    const Eigen::MatrixXd & mBSoft;
+    const Eigen::VectorXi & mSoftConstrIDs;
+    const Eigen::MatrixXd & mSoftConstrWeights;
+    const Eigen::MatrixXd & mSoftConstrDir;
 
     SparseMatrix mAfull;
     SparseMatrix mAVar;
@@ -109,6 +222,30 @@ namespace directional
 
     Eigen::SimplicialLDLT<SparseMatrix> mSolver;
   };
+
+
+  PolyVectorComputer::PolyVectorComputer(const Eigen::MatrixXd & vertices,
+                                         const Eigen::MatrixXd & B1,
+                                         const Eigen::MatrixXd & B2,
+                                         const Eigen::VectorXi & hardConstrIDs,
+                                         const Eigen::MatrixXd & hardConstrDir,
+                                         const Eigen::VectorXi & softConstrIDs,
+                                         const Eigen::MatrixXd & softConstrWeights,
+                                         const Eigen::MatrixXd & softConstrDir,
+                                         unsigned int N) : mVertices(vertices), mB1(B1), mB2(B2),
+                                         mHardConstrIDs(hardConstrIDs), mHardConstrDir(hardConstrDir),
+                                         mSoftConstrDir(softConstrDir), mSoftConstrWeights(softConstrWeights),
+                                         mSoftConstrIDs(softConstrIDs)
+  {
+    if (mHardConstrIDs.size() != mHardConstrDir.rows())
+      throw std::runtime_error("directional::PolyVectorComputer: The hard constraines data are inconsistant!");
+
+    if ((mSoftConstrDir.rows() + mSoftConstrIDs.rows() + mSoftConstrWeights.rows()) / 3. != mSoftConstrDir.rows())
+      throw std::runtime_error("directional::PolyVectorComputer: The soft constraines data are inconsistant!");
+    if(N == 0)
+      throw std::runtime_error("directional::PolyVectorComputer: The field degree cannot be 0!");
+    this->N = N;
+  }
 
   void PolyVectorComputer::tagVariables()
   {
@@ -122,97 +259,105 @@ namespace directional
     for (unsigned int i = 0; i < N * mB1.rows(); i++)
       if (varMask(i))
         full2var(i) = varCounter++;
-    assert(varCounter == N * (mB1.rows() - mBc.size()));
+    assert(varCounter == N * (mB1.rows() - mHardConstrIDs.size()));
   }
 
   void PolyVectorComputer::treatHardConstraints()
   {
-    Eigen::MatrixXcd constValuesMat(mB.rows(), N);
-    assert((mB.cols() == 3 * N) || (mB.cols() == 3));
-    if (mB.cols() == 3)  //N-RoSy constraint
+    Eigen::MatrixXcd constValuesMat(mHardConstrDir.rows(), N);
+    assert((mHardConstrDir.cols() == 3 * N) || (mHardConstrDir.cols() == 3));
+    if (mHardConstrDir.cols() == 3)  //N-RoSy constraint
     {
       constValuesMat.setZero();
-      for (unsigned int i = 0; i < mB.rows(); i++) {
-        std::complex<double> bComplex(mB.row(i).dot(mB1.row(mBc(i))), mB.row(i).dot(mB2.row(mBc(i))));
+      for (unsigned int i = 0; i < mHardConstrDir.rows(); i++) {
+        std::complex<double> bComplex(mHardConstrDir.row(i).dot(mB1.row(mHardConstrIDs(i))),
+                                      mHardConstrDir.row(i).dot(mB2.row(mHardConstrIDs(i))));
         constValuesMat(i, 0) = std::pow(bComplex, N);
       }
-    } else {
-      for (unsigned int i = 0; i < mB.rows(); i++) {
+    }
+    else
+    {
+      for (unsigned int i = 0; i < mHardConstrDir.rows(); i++)
+      {
         Eigen::RowVectorXcd poly, roots(N);
-        for (unsigned int n = 0; n < N; n++) {
-          Eigen::RowVector3d vec = mB.block(i, 3 * n, 1, 3);
-          roots(n) = std::complex<double>(vec.dot(mB1.row(mBc(i))), vec.dot(mB2.row(mBc(i))));
+        for (unsigned int n = 0; n < N; n++)
+        {
+          Eigen::RowVector3d vec = mHardConstrDir.block(i, 3 * n, 1, 3);
+          roots(n) = std::complex<double>(vec.dot(mB1.row(mHardConstrIDs(i))), vec.dot(mB2.row(mHardConstrIDs(i))));
         }
         roots_to_monicPolynomial(roots, poly);
         constValuesMat.row(i) << poly.head(N);
       }
     }
-    constValues.resize(N * mB.size());
+    constValues.resize(N * mHardConstrDir.size());
     constValues.setZero();
-    constIndices.resize(N * mBc.size());
+    constIndices.resize(N * mHardConstrIDs.size());
     constIndices.setZero();
-    for (unsigned int n = 0; n < N; n++) {
-      constIndices.segment(mBc.rows() * n, mBc.rows()) = mBc.array() + n * mB1.rows();
-      constValues.segment(mB.rows() * n, mB.rows()) = constValuesMat.col(n);
+    for (unsigned int n = 0; n < N; n++)
+    {
+      constIndices.segment(mHardConstrIDs.rows() * n, mHardConstrIDs.rows()) = mHardConstrIDs.array() + n * mB1.rows();
+      constValues.segment(mHardConstrDir.rows() * n, mHardConstrDir.rows()) = constValuesMat.col(n);
     }
   }
 
  void PolyVectorComputer::treatSoftConstraints()
  {
-   Eigen::MatrixXcd softValuesMat(mBSoft.rows(), N);
+   Eigen::MatrixXcd softValuesMat(mSoftConstrDir.rows(), N);
    softValuesMat.setZero();
-   if (!((mBSoft.cols() == 3 * N) || (mBSoft.cols() == 3)) || !((mWSoft.cols() == N) || (mWSoft.cols() == 1)))
-     throw std::runtime_error(
-         "directional::PolyVectorComputer:::treatSoftConstraints: Missing information!");
+   if (!((mSoftConstrDir.cols() == 3 * N) || (mSoftConstrDir.cols() == 3)) ||
+       !((mSoftConstrWeights.cols() == N) || (mSoftConstrWeights.cols() == 1)))
+     throw std::runtime_error("directional::PolyVectorComputer:::treatSoftConstraints: Missing information!");
 
-   if (mBSoft.cols() == 3)  //N-RoSy constraint
+   if (mSoftConstrDir.cols() == 3)  //N-RoSy constraint
    {
-     for (unsigned int i = 0; i < mBSoft.rows(); i++)
+     for (unsigned int i = 0; i < mSoftConstrDir.rows(); i++)
      {
-       std::complex<double> bComplex(mBSoft.row(i).dot(mB1.row(mBcSoft(i))), mBSoft.row(i).dot(mB2.row(mBcSoft(i))));
-       softValuesMat(i, 0) = std::pow(mWSoft(i, 0) * bComplex, N);
+       std::complex<double> bComplex(mSoftConstrDir.row(i).dot(mB1.row(mSoftConstrIDs(i))),
+                                     mSoftConstrDir.row(i).dot(mB2.row(mSoftConstrIDs(i))));
+       softValuesMat(i, 0) = std::pow(mSoftConstrWeights(i, 0) * bComplex, N);
      }
    }
    else
    {
-     for (unsigned int i = 0; i < mBSoft.rows(); i++)
+     for (unsigned int i = 0; i < mSoftConstrDir.rows(); i++)
      {
        Eigen::RowVectorXcd poly, roots(N);
        for (unsigned int n = 0; n < N; n++)
        {
-         Eigen::RowVector3d vec = mBSoft.block(i, 3 * n, 1, 3);
-         roots(n) = mWSoft(i, n) * std::complex<double>(vec.dot(mB1.row(mBcSoft(i))), vec.dot(mB2.row(mBcSoft(i))));
+         Eigen::RowVector3d vec = mSoftConstrDir.block(i, 3 * n, 1, 3);
+         roots(n) = mSoftConstrWeights(i, n) * std::complex<double>(vec.dot(mB1.row(mSoftConstrIDs(i))),
+                                                                    vec.dot(mB2.row(mSoftConstrIDs(i))));
        }
        roots_to_monicPolynomial(roots, poly);
        softValuesMat.row(i) << poly.head(N);
      }
    }
 
-   Eigen::MatrixXcd softWeightsMat(mWSoft.rows(), N);
+   Eigen::MatrixXcd softWeightsMat(mSoftConstrWeights.rows(), N);
    softWeightsMat.setZero();
-   if (mWSoft.cols() == 1)  //N-RoSy constraint
+   if (mSoftConstrWeights.cols() == 1)  //N-RoSy constraint
    {
-     for (unsigned int i = 0; i < mWSoft.rows(); i++)
-       softWeightsMat(i, 0) = std::complex<double>(mWSoft(i, 0), 0);
+     for (unsigned int i = 0; i < mSoftConstrWeights.rows(); i++)
+       softWeightsMat(i, 0) = std::complex<double>(mSoftConstrWeights(i, 0), 0);
    }
    else
    {
-     for (unsigned int i = 0; i < mWSoft.rows(); i++)
+     for (unsigned int i = 0; i < mSoftConstrWeights.rows(); i++)
        for (unsigned int n = 0; n < N; n++)
-         softWeightsMat(i, n) = std::complex<double>(mWSoft(i, n), 0);
+         softWeightsMat(i, n) = std::complex<double>(mSoftConstrWeights(i, n), 0);
    }
 
-   softValues.resize(N * mBSoft.size());
+   softValues.resize(N * mSoftConstrDir.size());
    softValues.setZero();
-   softWeights.resize(N * mWSoft.rows());
+   softWeights.resize(N * mSoftConstrWeights.rows());
    softWeights.setZero();
-   softIndices.resize(N * mBcSoft.size());
+   softIndices.resize(N * mSoftConstrIDs.size());
    softIndices.setZero();
    for (unsigned int n = 0; n < N; n++)
    {
-     softIndices.segment(mBcSoft.rows() * n, mBcSoft.rows()) = mBcSoft.array() + n * mB1.rows();
-     softWeights.segment(mWSoft.rows() * n, mWSoft.rows()) = softWeightsMat.col(n);
-     softValues.segment(mBSoft.rows() * n, mBSoft.rows()) = softValuesMat.col(n);
+     softIndices.segment(mSoftConstrIDs.rows() * n, mSoftConstrIDs.rows()) = mSoftConstrIDs.array() + n * mB1.rows();
+     softWeights.segment(mSoftConstrWeights.rows() * n, mSoftConstrWeights.rows()) = softWeightsMat.col(n);
+     softValues.segment(mSoftConstrDir.rows() * n, mSoftConstrDir.rows()) = softValuesMat.col(n);
    }
  }
 
@@ -223,12 +368,13 @@ namespace directional
    unsigned int rowCounter = 0;
    // Build the sparse matrix, with an energy term for each edge and degree
    for (unsigned int n = 0; n < N; n++) {
-     for (unsigned int i = 0; i < EF.rows(); i++) {
+     for (unsigned int i = 0; i < EF.rows(); i++)
+     {
        if ((EF(i, 0) == -1) || (EF(i, 1) == -1))
          continue;  //boundary edge
 
        // Compute the complex representation of the common edge
-       Eigen::RowVector3d e = mV.row(EV(i, 1)) - mV.row(EV(i, 0));
+       Eigen::RowVector3d e = mVertices.row(EV(i, 1)) - mVertices.row(EV(i, 0));
        Eigen::RowVector2d vef = Eigen::Vector2d(e.dot(mB1.row(EF(i, 0))),
                                                 e.dot(mB2.row(EF(i, 0)))).normalized();
        std::complex<double> ef(vef(0), vef(1));
@@ -280,12 +426,12 @@ namespace directional
 
    TContainer AVarTriplets;
    extractVarPartOfEnergy(AfullTriplets.cbegin(), AfullTriplets.cend(), OutputIterator(AVarTriplets));
-   mAVar.resize(rowCounter, N * (mB1.rows() - mBc.size()));
+   mAVar.resize(rowCounter, N * (mB1.rows() - mHardConstrIDs.size()));
    mAVar.setFromTriplets(AVarTriplets.cbegin(), AVarTriplets.cend());
 
    TContainer TSoft;
    buildSoftConstraintsEnergyMatrix(OutputIterator(TSoft));
-   mASoft.resize(N * (mB1.rows() - mBc.size()), N * (mB1.rows() - mBc.size()));
+   mASoft.resize(N * (mB1.rows() - mHardConstrIDs.size()), N * (mB1.rows() - mHardConstrIDs.size()));
    mASoft.setFromTriplets(TSoft.cbegin(), TSoft.cend());
  }
 
@@ -311,7 +457,8 @@ namespace directional
    Eigen::SparseMatrix<double> L(2 * mB1.rows(), 2 * mB1.rows());
    std::vector<Eigen::Triplet<double> > LTriplets;
    for (unsigned int k = 0; k < LComplex.outerSize(); ++k)
-     for (SparseMatrix::InnerIterator it(LComplex, k); it; ++it) {
+     for (SparseMatrix::InnerIterator it(LComplex, k); it; ++it)
+     {
        LTriplets.emplace_back(it.row(), it.col(), it.value().real());
        LTriplets.emplace_back(it.row(), LComplex.cols() + it.col(), -it.value().imag());
        LTriplets.emplace_back(LComplex.rows() + it.row(), it.col(), it.value().imag());
@@ -329,9 +476,9 @@ namespace directional
 
  void PolyVectorComputer::precompute(const Eigen::MatrixXi &EV, const Eigen::MatrixXi &EF)
  {
-   if (mB.rows() > 0)
+   if (mHardConstrDir.rows() > 0)
      treatHardConstraints();
-   if (mBSoft.rows() > 0)
+   if (mSoftConstrDir.rows() > 0)
      treatSoftConstraints();
    tagVariables();
    buildEnergyMatrics(EV, EF);
@@ -342,7 +489,7 @@ namespace directional
  void PolyVectorComputer::eval(Eigen::MatrixXcd &polyVectorField)
  {
    assert(mSolver.rows() != 0);
-   if (mBc.size() == 0 && mWSoft.size() == 0)
+   if (mHardConstrIDs.size() == 0 && mSoftConstrWeights.size() == 0)
    {
      evalNoConstraints(polyVectorField);
      return;
@@ -383,63 +530,44 @@ namespace directional
 
   IGL_INLINE void polyvector_field(const Eigen::MatrixXd & vertices,
                                    const Eigen::MatrixXi & faces,
-                                   const Eigen::VectorXi & hardConstrID,
+                                   const Eigen::VectorXi & hardConstrIDs,
                                    const Eigen::MatrixXd & hardConstrDir,
-                                   const Eigen::VectorXi & softConstrID,
+                                   const Eigen::VectorXi & softConstrIDs,
                                    const Eigen::MatrixXd & softConstrWeights,
                                    const Eigen::MatrixXd & softConstrDir,
                                    unsigned int N,
                                    Eigen::MatrixXcd& polyVectorField)
   {
-    Eigen::MatrixXi EV, xi, EF;
-    igl::edge_topology(vertices, faces, EV, xi, EF);
-    Eigen::MatrixXd B1, B2, xd;
-    igl::local_basis(vertices, faces, B1, B2, xd);
-    PolyVectorComputer pvComputer(vertices, B1, B2, hardConstrID, hardConstrDir, softConstrID,
+    Eigen::MatrixXi EV, EF;
+    Eigen::MatrixXd B1, B2;
+    // put this into a block to discard usless data
+    {
+      Eigen::MatrixXd B3;
+      Eigen::MatrixXi FE;
+      igl::edge_topology(vertices, faces, EV, FE, EF);
+      igl::local_basis(vertices, faces, B1, B2, B3);
+    }
+    PolyVectorComputer pvComputer(vertices, B1, B2, hardConstrIDs, hardConstrDir, softConstrIDs,
                                   softConstrWeights, softConstrDir, N);
     pvComputer.precompute(EV, EF);
     pvComputer.eval(polyVectorField);
   }
 
-  PolyVectorComputer::PolyVectorComputer(const Eigen::MatrixXd &V,
-                                         const Eigen::MatrixXd &B1,
-                                         const Eigen::MatrixXd &B2,
-                                         const Eigen::VectorXi &bc,
-                                         const Eigen::MatrixXd &b,
-                                         const Eigen::VectorXi &bcSoft,
-                                         const Eigen::MatrixXd &wSoft,
-                                         const Eigen::MatrixXd &bSoft,
-                                         unsigned int N) : mV(V), mB1(B1), mB2(B2), mBc(bc), mB(b), mBSoft(bSoft),
-                                         mWSoft(wSoft), mBcSoft(bcSoft)
-  {
-      if (mBc.size() != mB.rows())
-        throw std::runtime_error(
-            "directional::PolyVectorComputer: The hard constraines data are inconsistant!");
-
-      if ((mBSoft.rows() + mBcSoft.rows() + mWSoft.rows()) / 3. != mBSoft.rows())
-        throw std::runtime_error(
-            "directional::PolyVectorComputer: The soft constraines data are inconsistant!");
-
-      this->N = N;
-    }
-
-  IGL_INLINE void polyvector_field(const Eigen::MatrixXd & V,
-                                   const Eigen::MatrixXi & F,
-                                   const Eigen::VectorXi & bc,
-                                   const Eigen::MatrixXd & b,
+  IGL_INLINE void polyvector_field(const Eigen::MatrixXd & vertices,
+                                   const Eigen::MatrixXd & B1,
+                                   const Eigen::MatrixXd & B2,
+                                   const Eigen::MatrixXi & EV,
+                                   const Eigen::MatrixXi & EF,
+                                   const Eigen::VectorXi & hardConstrIDs,
+                                   const Eigen::MatrixXd & hardConstrDir,
+                                   const Eigen::VectorXi & softConstrIDs,
+                                   const Eigen::MatrixXd & softConstrWeights,
+                                   const Eigen::MatrixXd & softConstrDir,
                                    unsigned int N,
-                                   Eigen::MatrixXcd& polyVectorField)
+                                   Eigen::MatrixXcd & polyVectorField)
   {
-    Eigen::MatrixXi EV, xi, EF;
-    igl::edge_topology(V, F, EV, xi, EF);
-    Eigen::MatrixXd B1, B2, xd;
-    igl::local_basis(V, F, B1, B2, xd);
-
-    Eigen::VectorXi bcSoft;
-    Eigen::MatrixXd wSoft;
-    Eigen::MatrixXd bSoft;
-
-    PolyVectorComputer pvComputer(V, B1, B2, bc, b, bcSoft, wSoft, bSoft, N);
+    PolyVectorComputer pvComputer(vertices, B1, B2, hardConstrIDs, hardConstrDir, softConstrIDs,
+                                  softConstrWeights, softConstrDir, N);
     pvComputer.precompute(EV, EF);
     pvComputer.eval(polyVectorField);
   }
