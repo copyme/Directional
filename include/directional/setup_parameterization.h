@@ -496,7 +496,8 @@ namespace directional
     //in this case, also doing UV->UVW packing. This only works for N=6.
     if(N == 6)
     {
-      //this should be working
+      //this should be working, but this is just conversion between axial and cube coordinate systems, with the exception that
+      // normally in the axial corrdianetes r is w and q is x then y is -r -q
       SparseMatrix<double> baryMat(N * (wholeV.rows() + numTransitions) / 2, N * (wholeV.rows() + numTransitions) / 3);
       vector<Triplet<double> > baryMatTriplets;
       for(int i = 0; i < N * (wholeV.rows() + numTransitions) / 2; i += N / 2)
@@ -508,6 +509,9 @@ namespace directional
         baryMatTriplets.emplace_back(i + 2, (i * 2) / 3 + 1, 1.0);
       }
       baryMat.setFromTriplets(baryMatTriplets.begin(), baryMatTriplets.end());
+
+      //std::cout << pd.symmMat * baryMat << std::endl;
+
       pd.symmMat = pd.symmMat * baryMat;
       
       //cout<<"symmMat*VectorXd::Constant(symmMat.cols(),1.0): "<<symmMat*VectorXd::Constant(symmMat.cols(),1.0)<<endl;

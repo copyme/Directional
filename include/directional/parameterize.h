@@ -59,7 +59,7 @@ namespace directional
     using namespace Eigen;
     using namespace std;
     
-    assert (rawField.cols()==12 && "Currently only supporting N=4 parameterization");
+    //assert (rawField.cols()==12 && "Currently only supporting N=4 parameterization");
     
     VectorXd edgeWeights = VectorXd::Constant(FE.maxCoeff() + 1, 1.0);
     double length = igl::bounding_box_diagonal(wholeV) * lengthRatio;
@@ -106,7 +106,7 @@ namespace directional
         fixedMask(i) = 1;  //first vertex is always (0,0)
     }
     
-    if (roundIntegers)
+    if(roundIntegers)
     {
       for(int i = 0; i < pd.integerVars.size(); i++)
         fixedMask(pd.integerVars(i)) = 1;
@@ -233,7 +233,7 @@ namespace directional
 
       fullx = var2AllMat * x.head(numVars - alreadyFixed.sum()) + fixedValues;
 
-      cout << "(Cfull * fullx).lpNorm<Infinity>(): "<<(Cfull * fullx).lpNorm<Infinity>() << endl;
+      cout << "(Cfull * fullx).lpNorm<Infinity>(): "<< (Cfull * fullx).lpNorm<Infinity>() << endl;
       cout << "Poisson error: " << (Efull * fullx - gamma).lpNorm<Infinity>() << endl;
       
       if((alreadyFixed - fixedMask).sum() == 0)
@@ -246,7 +246,7 @@ namespace directional
         if((fixedMask(i)) && (!alreadyFixed(i)))
         {
           double currIntDiff = std::abs(0.5 * fullx(i) - std::round(0.5 * fullx(i)));
-          if (currIntDiff < minIntDiff)
+          if(currIntDiff < minIntDiff)
           {
             minIntDiff = currIntDiff;
             minIntDiffIndex = i;
@@ -278,9 +278,15 @@ namespace directional
     VectorXd cutUVVec = pd.vertexTrans2CutMat * pd.symmMat * fullx;
     //cutUVW.conservativeResize(cutV.rows(),N/2);
     cutUV.conservativeResize(cutV.rows(), 2);
+
+    Matrix2d c;
+    c << -sqrt(3), sqrt(3)/2., 0, 3./2.;
+
     for(int i = 0; i < cutV.rows(); i++)
-      cutUV.row(i) << cutUVVec.segment(N * i, N / 2).transpose();
-    
+    {
+      cutUV.row(i) << (c * cutUVVec.segment(N * i, N / 3)).transpose();
+    }
+
     //cout<<"symmMat*fullx: "<<symmMat*fullx<<endl;
     //cout<<"cutUVWVec: "<<cutUVWVec<<endl;
     //cout<<"cutUVW: "<<cutUVW<<endl;
