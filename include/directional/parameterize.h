@@ -280,11 +280,12 @@ namespace directional
     cutUV.conservativeResize(cutV.rows(), 2);
 
     Matrix2d c;
-    c << -sqrt(3), sqrt(3)/2., 0, 3./2.;
+    c << sqrt(3), sqrt(3)/2., 0, -3./2.;
 
     for(int i = 0; i < cutV.rows(); i++)
     {
-      cutUV.row(i) << (c * cutUVVec.segment(N * i, N / 3)).transpose();
+      std::cout << (cutUVVec.segment(N * i, N / 2)(0) + cutUVVec.segment(N * i, N / 2)(2) -  cutUVVec.segment(N * i, N / 2)(1)) << std::endl;
+      cutUV.row(i) << (c.transpose() * cutUVVec.segment(N * i, N / 3)).transpose();
     }
 
     //cout<<"symmMat*fullx: "<<symmMat*fullx<<endl;

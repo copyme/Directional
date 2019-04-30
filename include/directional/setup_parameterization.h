@@ -484,7 +484,7 @@ namespace directional
     vector<Triplet<double> > symmMatTriplets;
     for(int i = 0; i < N * (wholeV.rows() + numTransitions); i += N)
     {
-      for(int j = 0; j < N / 2; j++)
+     for(int j = 0; j < N / 2; j++)
       {
         symmMatTriplets.emplace_back(i + j, i / 2 + j, 1.0);
         symmMatTriplets.emplace_back(i + j + N / 2, i / 2 + j, -1.0);
