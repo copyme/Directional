@@ -144,6 +144,7 @@ namespace directional
     for (int i = 0; i < N; i++)
       unitPermMatrix((i + 1) % N, i) = 1;
 
+
     // simply generate all the members of the permutation group
     constParmMatrices[0] = MatrixXi::Identity(N, N);
     for (int i = 1; i < N; i++)
@@ -190,8 +191,10 @@ namespace directional
     { // HE is a map between half-edges to edges, but it does not carry the direction
       // EH edge to half-edge mapping
       Halfedge2Matching(i) = (EH(HE(i), 0) == i ? -matching(HE(i)) : matching(HE(i)));
-      while (Halfedge2Matching(i) < 0)
-        Halfedge2Matching(i) += N;
+      //no need for a loop just modulo with negative numbers
+      if(Halfedge2Matching(i) < 0)
+        //Halfedge2Matching(i) += N;
+        Halfedge2Matching(i) = (N + (Halfedge2Matching(i) % N)) % N;
       //while (Halfedge2Matching(i)>=N/2) Halfedge2Matching(i)-=N;
     }
     
@@ -409,7 +412,7 @@ namespace directional
         {
           for(int j = 0; j < permMatrices.size(); j++)
             permMatrices[j] = nextPermMatrix * permMatrices[j];
-          
+
           //and identity on the fresh transition
           permMatrices.push_back(MatrixXi::Identity(N, N));
           permIndices.push_back(wholeV.rows() + nextTransition - 1);
@@ -479,7 +482,7 @@ namespace directional
     pd.constraintMat.setFromTriplets(cleanTriplets.begin(), cleanTriplets.end());
     
     //filtering out sign symmetry
-    // symmetry between (u,v) and (-u, -v)
+    // symmetry between (u, v, w) and (-u, -v, -w)
     pd.symmMat.conservativeResize(N * (wholeV.rows() + numTransitions), N * (wholeV.rows() + numTransitions) / 2);
     vector<Triplet<double> > symmMatTriplets;
     for(int i = 0; i < N * (wholeV.rows() + numTransitions); i += N)

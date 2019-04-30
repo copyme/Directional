@@ -30,6 +30,34 @@
 
 namespace directional
 {
+  // we do not really need this kind of rounding but well, added
+  void cubeRound(const Eigen::VectorXd & fullx, Eigen::VectorXd & roundedX)
+  {
+    roundedX.setZero();
+    for(unsigned int i = 0; i + 1 < fullx.rows(); i += 2)
+    {
+      Eigen::Vector3d cube(fullx(i), -fullx(i+1), -fullx(i) + fullx(i + 1));
+      Eigen::Vector3d cubeR(std::round( 0.5 * fullx(i)), std::round(0.5 * fullx(i + 1)), std::round(0.5 * (-fullx(i) + fullx(i + 1))));
+      Eigen::Vector3d diff(std::abs(cubeR(0) - cube(0)), std::abs(cubeR(1) - cube(1)), std::abs(cubeR(2) - cube(2)));
+
+      if(diff(0) > diff(1) && diff(0) > diff(2))
+      {
+        roundedX(i) = (cubeR(1) - cubeR(2));
+        roundedX(i + 1) = cubeR(1);
+      }
+      else if (diff(1) > diff(2))
+      {
+        roundedX(i) = cubeR(0);
+        roundedX(i + 1) = (cubeR(0) + cubeR(2));
+      }
+      else
+      {
+        roundedX(i) = cubeR(0);
+        roundedX(i + 1) = cubeR(1);
+      }
+    }
+  }
+
   // Creates a parameterization of (currently supported) (u,v, -u,-v) functions from a directional field by solving the Poisson equation, with custom edge weights
   // Input:
   //  wholeV:       #V x 3 vertex coordinates of the original mesh.
@@ -159,6 +187,7 @@ namespace directional
     Cfull.setFromTriplets(CTriplets.begin(), CTriplets.end());
     SparseMatrix<double> var2AllMat;
     VectorXd fullx(numVars); fullx.setZero();
+    VectorXd roundedX(numVars); fullx.setZero();
     for(int intIter = 0; intIter < fixedMask.sum(); intIter++)
     {
       //the non-fixed variables to all variables
@@ -241,11 +270,14 @@ namespace directional
       
       double minIntDiff = 5000.0;
       int minIntDiffIndex = -1;
+
+      cubeRound(fullx, roundedX);
+
       for(int i = 0; i < numVars; i++)
       {
         if((fixedMask(i)) && (!alreadyFixed(i)))
         {
-          double currIntDiff = std::abs(0.5 * fullx(i) - std::round(0.5 * fullx(i)));
+          double currIntDiff = std::abs(0.5 * fullx(i) - roundedX(i));
           if(currIntDiff < minIntDiff)
           {
             minIntDiff = currIntDiff;
@@ -260,7 +292,7 @@ namespace directional
       if(minIntDiffIndex != -1)
       {
         alreadyFixed(minIntDiffIndex) = 1;
-        fixedValues(minIntDiffIndex) = std::round(0.5 * fullx(minIntDiffIndex)) * 2;
+        fixedValues(minIntDiffIndex) = roundedX(minIntDiffIndex) * 2.;
       }
       
       xprev.resize(x.rows() - 1);
@@ -272,7 +304,7 @@ namespace directional
       }
       xprev.tail(Cpart.rows()) = x.tail(Cpart.rows());
     }
-    
+
     //the results are packets of N functions for each vertex, and need to be allocated for corners
     //cout<<"fullx: "<<fullx<<endl;
     VectorXd cutUVVec = pd.vertexTrans2CutMat * pd.symmMat * fullx;
@@ -280,12 +312,15 @@ namespace directional
     cutUV.conservativeResize(cutV.rows(), 2);
 
     Matrix2d c;
-    c << sqrt(3), sqrt(3)/2., 0, -3./2.;
+    c << sqrt(3), 0, sqrt(3) / 2., -3 / 2. * 1.75;
+    Matrix2d ci;
+    ci << 1. / sqrt(3), 0, 1 / 3., -2 / 3. * 0.72864;
 
     for(int i = 0; i < cutV.rows(); i++)
     {
-      std::cout << (cutUVVec.segment(N * i, N / 2)(0) + cutUVVec.segment(N * i, N / 2)(2) -  cutUVVec.segment(N * i, N / 2)(1)) << std::endl;
-      cutUV.row(i) << (c.transpose() * cutUVVec.segment(N * i, N / 3)).transpose();
+      if((cutUVVec.segment(N * i, N / 2)(0) + cutUVVec.segment(N * i, N / 2)(2) -  cutUVVec.segment(N * i, N / 2)(1)) > 1e-10)
+        std::cout << (cutUVVec.segment(N * i, N / 2)(0) + cutUVVec.segment(N * i, N / 2)(2) -  cutUVVec.segment(N * i, N / 2)(1)) << std::endl;
+      cutUV.row(i) << (c * cutUVVec.segment(N * i, N / 3)).transpose();
     }
 
     //cout<<"symmMat*fullx: "<<symmMat*fullx<<endl;
@@ -307,5 +342,5 @@ namespace directional
 }
   
 #endif
-  
+
   
