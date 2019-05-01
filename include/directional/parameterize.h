@@ -312,9 +312,8 @@ namespace directional
     cutUV.conservativeResize(cutV.rows(), 2);
 
     Matrix2d c;
-    c << sqrt(3), 0, sqrt(3) / 2., -3 / 2. * 1.75;
-    Matrix2d ci;
-    ci << 1. / sqrt(3), 0, 1 / 3., -2 / 3. * 0.72864;
+    c << sqrt(3)  / sqrt(3), -sqrt(3) / 2./ sqrt(3), 0 , -3 / 2.;
+    std::cout << c << std::endl;
 
     for(int i = 0; i < cutV.rows(); i++)
     {
