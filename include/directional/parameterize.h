@@ -38,7 +38,7 @@ namespace directional
     {
       Eigen::Vector3d cube(fullx(i), -fullx(i+1), -fullx(i) + fullx(i + 1));
       Eigen::Vector3d cubeR(std::round( 0.5 * fullx(i)), std::round(0.5 * fullx(i + 1)), std::round(0.5 * (-fullx(i) + fullx(i + 1))));
-      Eigen::Vector3d diff(std::abs(cubeR(0) - cube(0)), std::abs(cubeR(1) - cube(1)), std::abs(cubeR(2) - cube(2)));
+      Eigen::Vector3d diff(std::abs(cubeR(0) - 0.5 * cube(0)), std::abs(cubeR(1) - 0.5 * cube(1)), std::abs(cubeR(2) - 0.5 * cube(2)));
 
       if(diff(0) > diff(1) && diff(0) > diff(2))
       {
