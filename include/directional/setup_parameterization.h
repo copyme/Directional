@@ -487,10 +487,10 @@ namespace directional
     vector<Triplet<double> > symmMatTriplets;
     for(int i = 0; i < N * (wholeV.rows() + numTransitions); i += N)
     {
-     for(int j = 0; j < N / 2; j++)
+     for(int j = 0; j < (int)std::round(N / 2); j++)
       {
         symmMatTriplets.emplace_back(i + j, i / 2 + j, 1.0);
-        symmMatTriplets.emplace_back(i + j + N / 2, i / 2 + j, -1.0);
+        symmMatTriplets.emplace_back(i + j + (int)std::round(N / 2), i / 2 + j, -1.0);
       }
     }
     pd.symmMat.setFromTriplets(symmMatTriplets.begin(), symmMatTriplets.end());
@@ -503,7 +503,7 @@ namespace directional
       // normally in the axial corrdianetes r is w and q is x then y is -r -q
       SparseMatrix<double> baryMat(N * (wholeV.rows() + numTransitions) / 2, N * (wholeV.rows() + numTransitions) / 3);
       vector<Triplet<double> > baryMatTriplets;
-      for(int i = 0; i < N * (wholeV.rows() + numTransitions) / 2; i += N / 2)
+      for(int i = 0; i < N * (wholeV.rows() + numTransitions) / 2; i += (int)std::round(N / 2))
       {
         baryMatTriplets.emplace_back(i, (i * 2) / 3, 1.0);
         baryMatTriplets.emplace_back(i + 1, (i * 2) / 3 + 1, 1.0);
@@ -520,22 +520,22 @@ namespace directional
       //cout<<"symmMat*VectorXd::Constant(symmMat.cols(),1.0): "<<symmMat*VectorXd::Constant(symmMat.cols(),1.0)<<endl;
 
       // the below code seems to be OK?
-      pd.integerVars.conservativeResize(N / 3 * numTransitions);
+      pd.integerVars.conservativeResize((int)round(N / 3) * numTransitions);
       pd.integerVars.setZero();
       for(int i = 0; i < numTransitions; i++)
       {
-        for (int j = 0; j < N / 3; j++)
-          pd.integerVars(N / 3 * i + j) = N / 3 * (wholeV.rows() + i) + j;
+        for (int j = 0; j < (int)std::round(N / 3); j++)
+          pd.integerVars((int)std::round(N / 3) * i + j) = (int)std::round(N / 3) * (wholeV.rows() + i) + j;
       }
     }
     else
     {
-      pd.integerVars.conservativeResize(N / 2 * numTransitions);
+      pd.integerVars.conservativeResize((int)std::round(N / 2) * numTransitions);
       pd.integerVars.setZero();
       for(int i = 0; i < numTransitions; i++)
       {
-        for (int j = 0; j < N / 2; j++)
-          pd.integerVars(N / 2 * i + j) = N / 2 * (wholeV.rows() + i) + j;
+        for (int j = 0; j < (int)std::round(N / 2); j++)
+          pd.integerVars((int)std::round(N / 2) * i + j) = (int)std::round(N / 2) * (wholeV.rows() + i) + j;
       }
     }
   }

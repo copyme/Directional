@@ -125,12 +125,12 @@ namespace directional
     fixedMask.setZero();
     if(N == 6)
     {
-      for(int i = 0; i < N / 3; i++)
+      for(int i = 0; i < (int)std::round(N / 3); i++)
       fixedMask(i) = 1;  //first vertex is always (0,0)
     }
     else
     {
-      for (int i = 0; i < N / 2; i++)
+      for (int i = 0; i < (int)std::round(N / 2); i++)
         fixedMask(i) = 1;  //first vertex is always (0,0)
     }
     
@@ -145,12 +145,12 @@ namespace directional
     alreadyFixed.setZero();
     if(N == 6)
     {
-      for(int i = 0; i < N / 3; i++)
+      for(int i = 0; i < (int)std::round(N / 3); i++)
         alreadyFixed(i) = 1;  //first vertex is always (0,0)
     }
     else
     {
-      for(int i = 0; i < N / 2; i++)
+      for(int i = 0; i < (int)std::round(N / 2); i++)
         alreadyFixed(i) = 1;  //first vertex is always (0,0)
     }
 
@@ -316,11 +316,7 @@ namespace directional
     std::cout << c << std::endl;
 
     for(int i = 0; i < cutV.rows(); i++)
-    {
-      if((cutUVVec.segment(N * i, N / 2)(0) + cutUVVec.segment(N * i, N / 2)(2) -  cutUVVec.segment(N * i, N / 2)(1)) > 1e-10)
-        std::cout << (cutUVVec.segment(N * i, N / 2)(0) + cutUVVec.segment(N * i, N / 2)(2) -  cutUVVec.segment(N * i, N / 2)(1)) << std::endl;
       cutUV.row(i) << (c * cutUVVec.segment(N * i, N / 3)).transpose();
-    }
 
     //cout<<"symmMat*fullx: "<<symmMat*fullx<<endl;
     //cout<<"cutUVWVec: "<<cutUVWVec<<endl;
