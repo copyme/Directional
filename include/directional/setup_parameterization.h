@@ -68,8 +68,6 @@ namespace directional
     using namespace Eigen;
     using namespace std;
     
-    //assert(N==4 && "Seamless Parameterization currently only supports N=4");
-    
     MatrixXi EFi,EH, FH;
     MatrixXd FEs;
     VectorXi VH, HV, HE, HF, nextH, prevH, twinH, innerEdges;
@@ -82,19 +80,19 @@ namespace directional
     for (int i = 0; i < singVertices.size(); i++)
       isSingular(singVertices(i)) = 1;
     
-    pd.constrainedVertices = VectorXi::Zero(wholeV.rows()); // just init the data structure field
+    pd.constrainedVertices = VectorXi::Zero(wholeV.rows());
     
     //computing extra topological information
     std::vector<int> innerEdgesVec; // collects ids of inner edges
     EFi = Eigen::MatrixXi::Constant(EF.rows(), 2, -1); // number of an edge inside the face
 
-    /* for internal edges there is 1 or  -1 ie if two faces are adjacent then for a given edge we
+    /* used later for internal edges there is 1 or  -1 ie if two faces are adjacent then for a given edge we
      * will have 1 in the frst face and -1 in the second
      */
     FEs = Eigen::MatrixXd::Zero(FE.rows(), FE.cols());
 
     /*
-     * in here we collect information about position of an edge inside each face containing it. Each triangular face
+     * here we collect information about position of an edge inside each face containing it. Each triangular face
      * has three edges of ids 0, 1, 2. So EFi(i, k) = j means that the edge i is inside the face k \in [0,1]
      * at the position j.
      */
@@ -104,7 +102,6 @@ namespace directional
       {
         if (EF(i, k) == -1)
           continue;
-       // well as long D is set to 3 for all faces the it does not make sense
         for (int j = 0; j < D(EF(i, k)); j++)
           if (FE(EF(i, k), j) == i)
             EFi(i, k) = j;
@@ -118,7 +115,7 @@ namespace directional
         FEs(EF(i, 0), EFi(i, 0)) = 1.0;
       if(EFi(i,1) != -1)
         FEs(EF(i, 1), EFi(i, 1)) = -1.0;
-      if ((EF(i,0) !=-1) && (EF(i,1)!=-1))
+      if ((EF(i, 0) !=-1) && (EF(i,1)!=-1))
         innerEdgesVec.push_back(i);
     }
 
@@ -127,7 +124,7 @@ namespace directional
     for (int i = 0; i < innerEdgesVec.size(); i++)
       innerEdges(i) = innerEdgesVec[i];
 
-    // compute half-edge representation
+    // compute the half-edge representation
     hedra::dcel(D, wholeF, EV, EF, EFi, innerEdges, VH, EH, FH, HV, HE, HF, nextH, prevH, twinH);
 
     // find boundary vertices and mark them
@@ -136,16 +133,13 @@ namespace directional
       if (twinH(i) == -1)
         isBoundary(HV(i)) = 1;
 
-    /* here we compute a permutation matrix
-     * is this used for vector field matching?
-     */
+    // here we compute a permutation matrix
     vector<MatrixXi> constParmMatrices(N);
     MatrixXi unitPermMatrix = MatrixXi::Zero(N, N);
     for (int i = 0; i < N; i++)
       unitPermMatrix((i + 1) % N, i) = 1;
 
-
-    // simply generate all the members of the permutation group
+    // generate all the members of the permutation group
     constParmMatrices[0] = MatrixXi::Identity(N, N);
     for (int i = 1; i < N; i++)
       constParmMatrices[i] = unitPermMatrix * constParmMatrices[i - 1];
@@ -184,23 +178,23 @@ namespace directional
     VectorXi Halfedge2TransitionIndices = VectorXi::Constant(HE.rows(), 32767);
     VectorXi Halfedge2Matching(HE.rows());
     VectorXi isHEClaimed = VectorXi::Zero(HE.rows());
-    //matching: EF(i,0)->EF(i,1), halfedge on i get the incoming matching, and so opposite.
 
-    // here we convert the matching that was calculated for the vector field over edges to work for half-edges
+    // here we convert the matching that was calculated for the vector field over edges to half-edges
     for (int i = 0; i < HE.rows(); i++)
-    { // HE is a map between half-edges to edges, but it does not carry the direction
+    {
+      // HE is a map between half-edges to edges, but it does not carry the direction
       // EH edge to half-edge mapping
       Halfedge2Matching(i) = (EH(HE(i), 0) == i ? -matching(HE(i)) : matching(HE(i)));
-      //no need for a loop just modulo with negative numbers
       if(Halfedge2Matching(i) < 0)
-        //Halfedge2Matching(i) += N;
         Halfedge2Matching(i) = (N + (Halfedge2Matching(i) % N)) % N;
-      //while (Halfedge2Matching(i)>=N/2) Halfedge2Matching(i)-=N;
     }
     
     int currTransition = 1;
     
-    //cutting mesh and creating map between wholeF and cutF
+    /*
+    * Next steps: cutting mesh and creating map between wholeF and cutF
+    */
+
     //cutting the mesh
     vector<int> cut2whole;
     vector<RowVector3d> cutVlist;
@@ -257,9 +251,6 @@ namespace directional
     {
       if (((cutValence(i) == 2) && (!isSingular(i))) || (cutValence(i) == 0))
         continue;  //either mid-cut curve or non at all
-      
-      //if (isBoundary(i))
-      //  continue;  //there is never a need to start with boundary vertices, and boundary curves don't get a transition variable
       
       //tracing curves until next node, if not already filled
       int beginH = VH(i);
@@ -379,8 +370,7 @@ namespace directional
           currCutVertex = newCutVertex;
           for(int i = 0; i < permIndices.size(); i++)
           {
-            // place the perumtation matrix in a bigger matrix, we need to know how things are connected along the cut?
-            // but why vertex wise?
+            // place the perumtation matrix in a bigger matrix, we need to know how things are connected along the cut, no?
             for(int j = 0; j < N; j++)
               for(int k = 0; k < N; k++)
                 vertexTrans2CutTriplets.emplace_back(N * currCutVertex + j, N * permIndices[i] + k, (double) permMatrices[i](j, k));
@@ -464,33 +454,32 @@ namespace directional
       }
     }
 
-    // what is going on here?
     vector< Triplet< double > > cleanTriplets;
    
     pd.vertexTrans2CutMat.conservativeResize(N * cutV.rows(), N * (wholeV.rows() + numTransitions));
     cleanTriplets.clear();
     for(int i = 0; i < vertexTrans2CutTriplets.size(); i++)
-      if(vertexTrans2CutTriplets[i].value() != 0.0) // this is not safe
+      if((float)vertexTrans2CutTriplets[i].value() != 0.0f)
         cleanTriplets.push_back(vertexTrans2CutTriplets[i]);
     pd.vertexTrans2CutMat.setFromTriplets(cleanTriplets.begin(), cleanTriplets.end());
     
     pd.constraintMat.conservativeResize(N * currConst, N * (wholeV.rows() + numTransitions));
     cleanTriplets.clear();
     for(int i = 0; i < constTriplets.size(); i++)
-      if(constTriplets[i].value() != 0.0)
+      if((float)constTriplets[i].value() != 0.0f)
         cleanTriplets.push_back(constTriplets[i]);
     pd.constraintMat.setFromTriplets(cleanTriplets.begin(), cleanTriplets.end());
     
     //filtering out sign symmetry
     // symmetry between (u, v, w) and (-u, -v, -w)
-    pd.symmMat.conservativeResize(N * (wholeV.rows() + numTransitions), N * (wholeV.rows() + numTransitions) / 2);
+    pd.symmMat.conservativeResize(N * (wholeV.rows() + numTransitions), (int)(N * (wholeV.rows() + numTransitions) / 2.));
     vector<Triplet<double> > symmMatTriplets;
     for(int i = 0; i < N * (wholeV.rows() + numTransitions); i += N)
     {
-     for(int j = 0; j < N / 2; j++)
+     for(int j = 0; j < N / 2.; j++)
       {
-        symmMatTriplets.emplace_back(i + j, i / 2 + j, 1.0);
-        symmMatTriplets.emplace_back(i + j + N / 2, i / 2 + j, -1.0);
+        symmMatTriplets.emplace_back(i + j, (int)(i / 2. + j), 1.0);
+        symmMatTriplets.emplace_back(i + j + (int)(N / 2.), (int)(i / 2. + j), -1.0);
       }
     }
     pd.symmMat.setFromTriplets(symmMatTriplets.begin(), symmMatTriplets.end());
@@ -499,50 +488,42 @@ namespace directional
     //in this case, also doing UV->UVW packing. This only works for N=6.
     if(N == 6)
     {
-      //this should be working, but this is just conversion between axial and cube coordinate systems, with the exception that
-      // normally in the axial corrdianetes r is w and q is x then y is -r -q
-      SparseMatrix<double> baryMat(N * (wholeV.rows() + numTransitions) / 2, N * (wholeV.rows() + numTransitions) / 3);
+      /* this is just conversion between axial and cube coordinate systems, with the exception that
+       * normally in the axial corrdianetes r is w and q is x then y is -r -q
+       */
+      SparseMatrix<double> baryMat((int)(N * (wholeV.rows() + numTransitions) / 2.), (int)(N * (wholeV.rows() + numTransitions) / 3.));
       vector<Triplet<double> > baryMatTriplets;
-      for(int i = 0; i < N * (wholeV.rows() + numTransitions) / 2; i += N / 2)
+      for(int i = 0; i < N * (wholeV.rows() + numTransitions) / 2; i += (int)(N / 2.))
       {
-        baryMatTriplets.emplace_back(i, (i * 2) / 3, 1.0);
-        baryMatTriplets.emplace_back(i + 1, (i * 2) / 3 + 1, 1.0);
+        baryMatTriplets.emplace_back(i, (int)((i * 2.) / 3.), 1.0);
+        baryMatTriplets.emplace_back(i + 1, (int)((i * 2.) / 3. + 1.), 1.0);
 
-        baryMatTriplets.emplace_back(i + 2, (i * 2) / 3, -1.0);
-        baryMatTriplets.emplace_back(i + 2, (i * 2) / 3 + 1, 1.0);
+        baryMatTriplets.emplace_back(i + 2, (int)((i * 2.) / 3.), -1.0);
+        baryMatTriplets.emplace_back(i + 2, (int)((i * 2.) / 3. + 1), 1.0);
       }
       baryMat.setFromTriplets(baryMatTriplets.begin(), baryMatTriplets.end());
-
-      //std::cout << pd.symmMat * baryMat << std::endl;
-
       pd.symmMat = pd.symmMat * baryMat;
       
-      //cout<<"symmMat*VectorXd::Constant(symmMat.cols(),1.0): "<<symmMat*VectorXd::Constant(symmMat.cols(),1.0)<<endl;
-
-      // the below code seems to be OK?
-      pd.integerVars.conservativeResize(N / 3 * numTransitions);
+      pd.integerVars.conservativeResize((int)(N / 3. * numTransitions));
       pd.integerVars.setZero();
       for(int i = 0; i < numTransitions; i++)
       {
-        for (int j = 0; j < N / 3; j++)
-          pd.integerVars(N / 3 * i + j) = N / 3 * (wholeV.rows() + i) + j;
+        for (int j = 0; j < N / 3.; j++)
+          pd.integerVars(N / 3 * i + j) = (int)(N / 3.) * (wholeV.rows() + i) + j;
       }
     }
     else
     {
-      pd.integerVars.conservativeResize(N / 2 * numTransitions);
+      pd.integerVars.conservativeResize((int)(N / 2. * numTransitions));
       pd.integerVars.setZero();
       for(int i = 0; i < numTransitions; i++)
       {
-        for (int j = 0; j < N / 2; j++)
-          pd.integerVars(N / 2 * i + j) = N / 2 * (wholeV.rows() + i) + j;
+        for (int j = 0; j < N / 2.; j++)
+          pd.integerVars(N / 2 * i + j) = (int)(N / 2.) * (wholeV.rows() + i) + j;
       }
     }
   }
 }
-
-
-
 
 #endif
 

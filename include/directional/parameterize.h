@@ -30,33 +30,6 @@
 
 namespace directional
 {
-  // we do not really need this kind of rounding but well, added
-  void cubeRound(const Eigen::VectorXd & fullx, Eigen::VectorXd & roundedX)
-  {
-    roundedX.setZero();
-    for(unsigned int i = 0; i + 1 < fullx.rows(); i += 2)
-    {
-      Eigen::Vector3d cube(fullx(i), -fullx(i+1), -fullx(i) + fullx(i + 1));
-      Eigen::Vector3d cubeR(std::round( 0.5 * fullx(i)), std::round(0.5 * fullx(i + 1)), std::round(0.5 * (-fullx(i) + fullx(i + 1))));
-      Eigen::Vector3d diff(std::abs(cubeR(0) - 0.5 * cube(0)), std::abs(cubeR(1) - 0.5 * cube(1)), std::abs(cubeR(2) - 0.5 * cube(2)));
-
-      if(diff(0) > diff(1) && diff(0) > diff(2))
-      {
-        roundedX(i) = (cubeR(1) - cubeR(2));
-        roundedX(i + 1) = cubeR(1);
-      }
-      else if (diff(1) > diff(2))
-      {
-        roundedX(i) = cubeR(0);
-        roundedX(i + 1) = (cubeR(0) + cubeR(2));
-      }
-      else
-      {
-        roundedX(i) = cubeR(0);
-        roundedX(i + 1) = cubeR(1);
-      }
-    }
-  }
 
   // Creates a parameterization of (currently supported) (u,v, -u,-v) functions from a directional field by solving the Poisson equation, with custom edge weights
   // Input:
@@ -125,12 +98,12 @@ namespace directional
     fixedMask.setZero();
     if(N == 6)
     {
-      for(int i = 0; i < N / 3; i++)
+      for(int i = 0; i < N / 3.; i++)
       fixedMask(i) = 1;  //first vertex is always (0,0)
     }
     else
     {
-      for (int i = 0; i < N / 2; i++)
+      for (int i = 0; i < N / 2.; i++)
         fixedMask(i) = 1;  //first vertex is always (0,0)
     }
     
@@ -145,12 +118,12 @@ namespace directional
     alreadyFixed.setZero();
     if(N == 6)
     {
-      for(int i = 0; i < N / 3; i++)
+      for(int i = 0; i < N / 3.; i++)
         alreadyFixed(i) = 1;  //first vertex is always (0,0)
     }
     else
     {
-      for(int i = 0; i < N / 2; i++)
+      for(int i = 0; i < N / 2.; i++)
         alreadyFixed(i) = 1;  //first vertex is always (0,0)
     }
 
@@ -187,7 +160,6 @@ namespace directional
     Cfull.setFromTriplets(CTriplets.begin(), CTriplets.end());
     SparseMatrix<double> var2AllMat;
     VectorXd fullx(numVars); fullx.setZero();
-    VectorXd roundedX(numVars); fullx.setZero();
     for(int intIter = 0; intIter < fixedMask.sum(); intIter++)
     {
       //the non-fixed variables to all variables
@@ -270,15 +242,12 @@ namespace directional
       
       double minIntDiff = 5000.0;
       int minIntDiffIndex = -1;
-
-      cubeRound(fullx, roundedX);
-
-      for(int i = 0; i < numVars; i++)
+      for (int i = 0; i < numVars; i++)
       {
-        if((fixedMask(i)) && (!alreadyFixed(i)))
+        if ((fixedMask(i)) && (!alreadyFixed(i)))
         {
-          double currIntDiff = std::abs(0.5 * fullx(i) - roundedX(i));
-          if(currIntDiff < minIntDiff)
+          double currIntDiff = std::fabs(0.5 * fullx(i) - std::round(0.5 * fullx(i)));
+          if (currIntDiff < minIntDiff)
           {
             minIntDiff = currIntDiff;
             minIntDiffIndex = i;
@@ -289,10 +258,10 @@ namespace directional
       cout << "Integer variable: " << minIntDiffIndex << endl;
       cout << "Integer error: " << minIntDiff << endl;
       
-      if(minIntDiffIndex != -1)
+      if (minIntDiffIndex!=-1)
       {
         alreadyFixed(minIntDiffIndex) = 1;
-        fixedValues(minIntDiffIndex) = roundedX(minIntDiffIndex) * 2.;
+        fixedValues(minIntDiffIndex) =std::round(0.5 * fullx(minIntDiffIndex)) * 2;
       }
       
       xprev.resize(x.rows() - 1);
@@ -306,37 +275,11 @@ namespace directional
     }
 
     //the results are packets of N functions for each vertex, and need to be allocated for corners
-    //cout<<"fullx: "<<fullx<<endl;
     VectorXd cutUVVec = pd.vertexTrans2CutMat * pd.symmMat * fullx;
-    //cutUVW.conservativeResize(cutV.rows(),N/2);
     cutUV.conservativeResize(cutV.rows(), 2);
 
-    Matrix2d c;
-    c << sqrt(3)  / sqrt(3), -sqrt(3) / 2./ sqrt(3), 0 , -3 / 2.;
-    std::cout << c << std::endl;
-
     for(int i = 0; i < cutV.rows(); i++)
-    {
-      if((cutUVVec.segment(N * i, N / 2)(0) + cutUVVec.segment(N * i, N / 2)(2) -  cutUVVec.segment(N * i, N / 2)(1)) > 1e-10)
-        std::cout << (cutUVVec.segment(N * i, N / 2)(0) + cutUVVec.segment(N * i, N / 2)(2) -  cutUVVec.segment(N * i, N / 2)(1)) << std::endl;
-      cutUV.row(i) << (c * cutUVVec.segment(N * i, N / 3)).transpose();
-    }
-
-    //cout<<"symmMat*fullx: "<<symmMat*fullx<<endl;
-    //cout<<"cutUVWVec: "<<cutUVWVec<<endl;
-    //cout<<"cutUVW: "<<cutUVW<<endl;
-    //if (N==4){
-      //cutUV = cutUVW.block(0,0,cutUVW.rows(),2);
-    /*}else {
-      double yratio = 2.0/sqrt(3.0);
-      RowVector3d UAxis; UAxis<<1, 1,0; UAxis.normalize();
-      RowVector3d VAxis; VAxis<<-1, 1, 2; VAxis.normalize();
-      VectorXd a = cutUVW.col(0)+cutUVW.col(1);
-      VectorXd b = -cutUVW.col(0)+cutUVW.col(2);
-      cutUV.col(0) = a-b/2.0;
-      cutUV.col(1) = b*sqrt(3.0)/2.0*yratio;
-      //cutUV = cutUVW.block(0,0,cutUVW.rows(),2);
-    }*/
+      cutUV.row(i) << cutUVVec.segment(N * i, 2).transpose();
   }
 }
   
