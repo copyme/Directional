@@ -519,7 +519,8 @@ namespace directional
       for(int i = 0; i < numTransitions; i++)
       {
         for (int j = 0; j < N / 2.; j++)
-          pd.integerVars(N / 2 * i + j) = (int)(N / 2.) * (wholeV.rows() + i) + j;
+          pd.integerVars((int)(N / 2. * i) + j) = (int)(N / 2.) * (wholeV.rows() + i) + j;
+
       }
     }
   }

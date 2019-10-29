@@ -60,8 +60,6 @@ namespace directional
     using namespace Eigen;
     using namespace std;
     
-    //assert (rawField.cols()==12 && "Currently only supporting N=4 parameterization");
-    
     VectorXd edgeWeights = VectorXd::Constant(FE.maxCoeff() + 1, 1.0);
     double length = igl::bounding_box_diagonal(wholeV) * lengthRatio;
     
